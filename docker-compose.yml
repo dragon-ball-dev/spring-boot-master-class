@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Cấu hình cho PostgreSQL
+  postgres_db:
+    image: postgres:14.1-alpine
+    container_name: postgres_container
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: my_postgres_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  # Cấu hình cho MySQL
+  mysql_db:
+    image: mysql:latest
+    container_name: mysql_container
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: my_mysql_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password123
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+
+volumes:
+  postgres_data:
+  mysql_data:
