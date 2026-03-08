@@ -10,18 +10,18 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 
 ## 🗺️ Lộ trình khóa học (Curriculum)
 
-| Bài    | Nội dung bài giảng                            | Trạng thái |     Mã nguồn     |
-|:-------|:----------------------------------------------|:----------:|:----------------:|
-| 01     | Khởi động & Tư duy Backend 2026               |   ✅ Done   |  [View Code](#)  |
-| 02     | IoC, DI - Nội công tâm pháp                   |   ✅ Done   |  [View Code](#)  |
-| 03     | Spring Container vs Bean                      |   ✅ Done   |  [View Code](#)  |
-| 04     | Pháp thuật Auto-Configuration                 |   ✅ Done   |  [View Code](#)  |
-| 05     | Cấu trúc thư mục Chuẩn Doanh Nghiệp (3-Tier)  |   ✅ Done   |  [View Code](#)  |
-| 06     | Kết nối PostgreSQL vs MySQL & Spring Data JPA |   ✅ Done   |  [View Code](#)  |
-| **07** | **Tạo REST API đầu tiên với @RestController** | 🚀 Current  | [**Explore**](#) |
-| 08     | Ma thuật record, ModderMapper vs ObjectMapper | ⏳ Comming | - |
-| ...    | ...                                           |    ...     |       ...        |
-| 10     | Spring Security & JWT Authentication          | 🔒 Locked  |        -         |
+| Bài  | Nội dung bài giảng                                           | Trạng thái |    Mã nguồn    |
+|:-----|:-------------------------------------------------------------|:----------:|:--------------:|
+| 01   | Khởi động & Tư duy Backend 2026                              |   ✅ Done   | [View Code](#) |
+| 02   | IoC, DI - Nội công tâm pháp                                  |   ✅ Done   | [View Code](#) |
+| 03   | Spring Container vs Bean                                     |   ✅ Done   | [View Code](#) |
+| 04   | Pháp thuật Auto-Configuration                                |   ✅ Done   | [View Code](#) |
+| 05   | Cấu trúc thư mục Chuẩn Doanh Nghiệp (3-Tier)                 |   ✅ Done   | [View Code](#) |
+| 06   | Kết nối PostgreSQL vs MySQL & Spring Data JPA                |   ✅ Done   | [View Code](#) |
+| 07 | Tạo REST API đầu tiên với @RestController                    |   ✅ Done   |  [View Code](#)  |
+| **08**   | **Ma thuật MapStruct, record, ModderMapper vs ObjectMapper** | 🚀 Current  | [**Explore**](#) |
+| ...  | ...                                                          |    ...     |      ...       |
+| 10   | Spring Security & JWT Authentication                         | 🔒 Locked  |       -        |
 
 ---
 
