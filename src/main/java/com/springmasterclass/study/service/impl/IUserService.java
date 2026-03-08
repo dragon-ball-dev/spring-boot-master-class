@@ -1,12 +1,17 @@
 package com.springmasterclass.study.service.impl;
 
+import com.springmasterclass.study.dto.record.UserRequest;
+import com.springmasterclass.study.dto.record.UserResponse;
 import com.springmasterclass.study.dto.request.UserRq;
 import com.springmasterclass.study.dto.response.UserRp;
 import com.springmasterclass.study.entity.User;
+import com.springmasterclass.study.mapper.UserMapper;
 import com.springmasterclass.study.repository.UserRepository;
 import com.springmasterclass.study.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,32 +21,34 @@ import java.util.Optional;
 public class IUserService implements UserService {
 
     private final UserRepository userRepository;
+    private final ModelMapper modelMapper;
+    private final UserMapper userMapper;
 
     @Override
-    public void create(UserRq rq) {
+    public void create(UserRequest rq) {
         userRepository.save(mapToEntity(rq));
     }
 
     @Override
-    public void update(String id, UserRq rq) {
+    public void update(String id, UserRequest rq) {
         Optional<User> user = userRepository.findById(id);
         if (user.isEmpty()) {
             throw new IllegalArgumentException("User not exist!");
         }
 
         User userUpdate = user.get();
-        userUpdate.setName(rq.getName());
-        userUpdate.setPhone(rq.getPhone());
-        userUpdate.setEmail(rq.getEmail());
-        userUpdate.setPassword(rq.getPassword());
-        userUpdate.setUsername(rq.getUsername());
+        userUpdate.setName(rq.name());
+        userUpdate.setPhone(rq.phone());
+        userUpdate.setEmail(rq.email());
+        userUpdate.setPassword(rq.password());
+        userUpdate.setUsername(rq.username());
         userRepository.save(userUpdate);
     }
 
     @Override
-    public List<UserRp> index() {
+    public List<UserResponse> index() {
         List<User> list = userRepository.findAll();
-        return list.stream().map(this::mapToResponse).toList();
+        return list.stream().map(this::mapToResponseOfMapStruct).toList();
     }
 
     @Override
@@ -65,6 +72,7 @@ public class IUserService implements UserService {
     }
 
     private UserRp mapToResponse(User user) {
+//        UserRp userRp = modelMapper.map(user, UserRp.class);
         return UserRp.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -73,5 +81,13 @@ public class IUserService implements UserService {
                 .username(user.getUsername())
                 .phone(user.getPhone())
                 .build();
+    }
+
+    private User mapToEntity(UserRequest userRequest) {
+        return userMapper.toEntity(userRequest);
+    }
+
+    private UserResponse mapToResponseOfMapStruct(User user){
+        return userMapper.toResponse(user);
     }
 }

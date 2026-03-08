@@ -1,5 +1,7 @@
 package com.springmasterclass.study.controller;
 
+import com.springmasterclass.study.dto.record.UserRequest;
+import com.springmasterclass.study.dto.record.UserResponse;
 import com.springmasterclass.study.dto.request.UserRq;
 import com.springmasterclass.study.dto.response.UserRp;
 import com.springmasterclass.study.service.UserService;
@@ -18,18 +20,18 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    public ResponseEntity<List<UserRp>> showListUsers() {
+    public ResponseEntity<List<UserResponse>> showListUsers() {
         return new ResponseEntity<>(userService.index(), HttpStatus.OK);
     }
 
     @PostMapping
-    public ResponseEntity<String> creaetNewUser(@RequestBody UserRq userRq) {
+    public ResponseEntity<String> creaetNewUser(@RequestBody UserRequest userRq) {
         userService.create(userRq);
         return new ResponseEntity<>("Create a new user successfully", HttpStatus.CREATED);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<String> updateUser(@PathVariable("id") String id,@RequestBody UserRq userRq){
+    public ResponseEntity<String> updateUser(@PathVariable("id") String id,@RequestBody UserRequest userRq){
         userService.update(id, userRq);
         return new ResponseEntity<>("Update a user successfully", HttpStatus.OK);
     }
