@@ -5,6 +5,7 @@ import com.springmasterclass.study.dto.record.UserResponse;
 import com.springmasterclass.study.dto.request.UserRq;
 import com.springmasterclass.study.dto.response.UserRp;
 import com.springmasterclass.study.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,7 @@ public class UserController {
     }
 
     @PostMapping
-    public ResponseEntity<String> creaetNewUser(@RequestBody UserRequest userRq) {
+    public ResponseEntity<String> creaetNewUser(@Valid @RequestBody UserRequest userRq) {
         userService.create(userRq);
         return new ResponseEntity<>("Create a new user successfully", HttpStatus.CREATED);
     }

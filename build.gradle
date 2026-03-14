@@ -29,6 +29,8 @@ dependencies {
     // Bắt buộc phải có 3 dòng này để MapStruct tự sinh code Impl
     annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.mysql:mysql-connector-j'
     runtimeOnly 'org.postgresql:postgresql'
