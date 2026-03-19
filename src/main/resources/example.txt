@@ -1,0 +1,33 @@
+// API "Hỗn loạn" (Inconsistent API)
+{
+  "id": 1,
+  "username": "spring_master",
+  "email": "admin@example.com"
+}
+
+
+[
+  { "id": 1, "username": "user1" },
+  { "id": 2, "username": "user2" }
+]
+
+
+{
+  "timestamp": "2026-03-17T13:23:22.000+00:00",
+  "status": 500,
+  "error": "Internal Server Error",
+  "path": "/api/v1/users/99"
+}
+
+ApiResponse Java Record vs Generics
+// API "Chuẩn doanh nghiệp" (Standardized API)
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "id": 1,
+    "username": "spring_master",
+    "email": "admin@example.com"
+  }
+}
+

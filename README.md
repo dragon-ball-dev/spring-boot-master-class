@@ -20,9 +20,10 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 06     | Kết nối PostgreSQL vs MySQL & Spring Data JPA            |   ✅ Done   |  [View Code](#)  |
 | 07     | Tạo REST API đầu tiên với @RestController                |   ✅ Done   |  [View Code](#)  |
 | 08     | Ma thuật MapStruct, record, ModderMapper vs ObjectMapper |   ✅ Done   |  [View Code](#)  |
-| **09** | **Validation dữ liệu đầu vào & Bắt lỗi toàn cục**        | 🚀 Current | [**Explore**](#) |
+| 10     | Validation dữ liệu đầu vào & Bắt lỗi toàn cục            | ✅ Done | [View Code](#) |
+| **11** | **Làm chủ Pagination & Sorting trong Spring Boot**        | 🚀 Current | [**Explore**](#) |
 | ...    | ...                                                      |    ...     |       ...        |
-| 10     | Spring Security & JWT Authentication                     | 🔒 Locked  |        -         |
+| 20     | Spring Security & JWT Authentication                     | 🔒 Locked  |        -         |
 
 ---
 
