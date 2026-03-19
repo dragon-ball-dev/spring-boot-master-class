@@ -1,5 +1,7 @@
 package com.springmasterclass.study.controller;
 
+import com.springmasterclass.study.common.ApiResponse;
+import com.springmasterclass.study.common.BaseController;
 import com.springmasterclass.study.dto.record.UserRequest;
 import com.springmasterclass.study.dto.record.UserResponse;
 import com.springmasterclass.study.dto.request.UserRq;
@@ -16,19 +18,19 @@ import java.util.List;
 @RestController
 @RequestMapping(value = "/api/v1/users")
 @RequiredArgsConstructor
-public class UserController {
+public class UserController extends BaseController {
 
     private final UserService userService;
 
     @GetMapping
-    public ResponseEntity<List<UserResponse>> showListUsers() {
-        return new ResponseEntity<>(userService.index(), HttpStatus.OK);
+    public ApiResponse<List<UserResponse>> showListUsers() {
+        return createSuccessResponse(userService.index());
     }
 
     @PostMapping
-    public ResponseEntity<String> creaetNewUser(@Valid @RequestBody UserRequest userRq) {
+    public ApiResponse<String> creaetNewUser(@Valid @RequestBody UserRequest userRq) {
         userService.create(userRq);
-        return new ResponseEntity<>("Create a new user successfully", HttpStatus.CREATED);
+        return createSuccessResponse("Create a new user successfully");
     }
 
     @PutMapping("/{id}")
