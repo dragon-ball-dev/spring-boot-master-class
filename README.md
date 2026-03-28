@@ -21,7 +21,9 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 07     | Tạo REST API đầu tiên với @RestController                |   ✅ Done   |  [View Code](#)  |
 | 08     | Ma thuật MapStruct, record, ModderMapper vs ObjectMapper |   ✅ Done   |  [View Code](#)  |
 | 10     | Validation dữ liệu đầu vào & Bắt lỗi toàn cục            | ✅ Done | [View Code](#) |
-| **11** | **Làm chủ Pagination & Sorting trong Spring Boot**        | 🚀 Current | [**Explore**](#) |
+| 11     | Làm chủ Pagination & Sorting trong Spring Boot            | ✅ Done | [View Code](#) |
+| 12     | Làm chủ Pagination & Sorting trong Spring Boot            | ✅ Done | [View Code](#) |
+| **13** | **TOÀN TẬP QUAN HỆ 1-N & TRUY QUÉT N+1 QUERY**        | 🚀 Current | [**Explore**](#) |
 | ...    | ...                                                      |    ...     |       ...        |
 | 20     | Spring Security & JWT Authentication                     | 🔒 Locked  |        -         |
 
