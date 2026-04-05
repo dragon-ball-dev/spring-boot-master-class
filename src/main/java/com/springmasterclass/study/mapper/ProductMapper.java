@@ -9,4 +9,5 @@ import org.mapstruct.MappingConstants;
 public interface ProductMapper {
 
 //    ProductResponse toResponse(Product product);
+
 }

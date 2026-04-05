@@ -22,4 +22,5 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 
     @EntityGraph(attributePaths = {"checkups", "doctors"})
     Page<Patient> findAll(Pageable pageable);
+
 }
