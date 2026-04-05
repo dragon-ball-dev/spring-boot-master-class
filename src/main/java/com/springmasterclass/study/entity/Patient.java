@@ -1,12 +1,22 @@
 package com.springmasterclass.study.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity // Đánh dấu đây là một JPA Entity
 @Table(name = "patients") // Ánh xạ với bảng patients trong DB
-
-public class Patient {
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class Patient { // (1)
 
     @Id // Khai báo Primary Key
     @GeneratedValue(strategy = GenerationType.IDENTITY) // Auto Increment
@@ -20,6 +30,6 @@ public class Patient {
 
     private LocalDateTime createdAt;
 
-    // Hibernate yêu cầu No-args Constructor (Constructor không tham số)
-    public Patient() {}
+    @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Checkup> checkups = new ArrayList<>();
 }
