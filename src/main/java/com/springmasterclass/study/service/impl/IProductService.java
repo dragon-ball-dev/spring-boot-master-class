@@ -32,6 +32,7 @@ public class IProductService implements ProductService {
         // Jpa Specification
         Page<Product> products = productRepository.findAll(ProductSpecification.filterProducts(name, BigDecimal.valueOf(10000), category), pageable);
 
-        return products.map(productMapper::toResponse);
+//        return products.map(productMapper::toResponse);
+        return null;
     }
 }

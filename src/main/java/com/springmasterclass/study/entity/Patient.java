@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
+
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -31,5 +33,6 @@ public class Patient { // (1)
     private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 20)
     private List<Checkup> checkups = new ArrayList<>();
 }
