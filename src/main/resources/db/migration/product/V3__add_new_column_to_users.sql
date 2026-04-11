@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN last_first_login TIMESTAMP NULL;
