@@ -39,6 +39,18 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Flyway starter (bắt buộc để auto-config trong Spring Boot 4.x)
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+
+    // Core Flyway
+    implementation 'org.flywaydb:flyway-core'
+
+    // Database-specific module cho PostgreSQL (bắt buộc từ Flyway 10+)
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // JDBC Driver cho PostgreSQL
+    runtimeOnly 'org.postgresql:postgresql'
 }
 
 tasks.named('test') {
