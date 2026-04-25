@@ -1,6 +1,6 @@
 package com.springmasterclass.study.repository;
 
-import com.springmasterclass.study.entity.User;
+import com.springmasterclass.study.entity.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

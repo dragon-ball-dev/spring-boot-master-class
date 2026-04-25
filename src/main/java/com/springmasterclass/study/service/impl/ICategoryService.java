@@ -2,8 +2,8 @@ package com.springmasterclass.study.service.impl;
 
 import com.springmasterclass.study.dto.record.CategoryRequest;
 import com.springmasterclass.study.dto.record.ProductRequest;
-import com.springmasterclass.study.entity.Category;
-import com.springmasterclass.study.entity.Product;
+import com.springmasterclass.study.entity.product.Category;
+import com.springmasterclass.study.entity.product.Product;
 import com.springmasterclass.study.mapper.CategoryMapper;
 import com.springmasterclass.study.repository.CategoryRepository;
 import com.springmasterclass.study.repository.ProductRepository;
@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor

@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    user:
+      jdbc-url: jdbc:postgresql://localhost:5434/user_db
+      username: admin
+      password: password123
+    product:
+      jdbc-url: jdbc:postgresql://localhost:5434/product_db
+      username: admin
+      password: password123
+server:
+  port: 9090

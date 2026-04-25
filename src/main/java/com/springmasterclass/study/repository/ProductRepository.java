@@ -1,6 +1,6 @@
 package com.springmasterclass.study.repository;
 
-import com.springmasterclass.study.entity.Product;
+import com.springmasterclass.study.entity.product.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

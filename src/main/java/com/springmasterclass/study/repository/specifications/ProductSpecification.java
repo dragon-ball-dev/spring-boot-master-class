@@ -1,9 +1,6 @@
 package com.springmasterclass.study.repository.specifications;
 
-import com.springmasterclass.study.entity.Product;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.JoinType;
+import com.springmasterclass.study.entity.product.Product;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;

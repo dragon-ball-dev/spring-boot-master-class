@@ -1,8 +1,8 @@
 package com.springmasterclass.study.service.impl;
 
 import com.springmasterclass.study.dto.record.PatientResponseDTO;
-import com.springmasterclass.study.entity.Checkup;
-import com.springmasterclass.study.entity.Patient;
+import com.springmasterclass.study.entity.user.Checkup;
+import com.springmasterclass.study.entity.user.Patient;
 import com.springmasterclass.study.repository.PatientRepository;
 import com.springmasterclass.study.service.PatientService;
 import org.springframework.beans.factory.annotation.Autowired;
