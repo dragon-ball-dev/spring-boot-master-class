@@ -1,6 +1,6 @@
 package com.springmasterclass.study.common;
 
-import com.springmasterclass.study.entity.Checkup;
+import com.springmasterclass.study.entity.user.Checkup;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 

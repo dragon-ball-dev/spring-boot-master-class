@@ -1,4 +1,4 @@
-package com.springmasterclass.study.entity;
+package com.springmasterclass.study.entity.user;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

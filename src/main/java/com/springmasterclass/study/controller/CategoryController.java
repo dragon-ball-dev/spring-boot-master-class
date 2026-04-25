@@ -3,7 +3,7 @@ package com.springmasterclass.study.controller;
 import com.springmasterclass.study.common.ApiResponse;
 import com.springmasterclass.study.common.BaseController;
 import com.springmasterclass.study.dto.record.CategoryRequest;
-import com.springmasterclass.study.entity.Category;
+import com.springmasterclass.study.entity.product.Category;
 import com.springmasterclass.study.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -2,8 +2,8 @@ package com.springmasterclass.study.mapper;
 
 import com.springmasterclass.study.dto.record.CategoryRequest;
 import com.springmasterclass.study.dto.record.ProductRequest;
-import com.springmasterclass.study.entity.Category;
-import com.springmasterclass.study.entity.Product;
+import com.springmasterclass.study.entity.product.Category;
+import com.springmasterclass.study.entity.product.Product;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;

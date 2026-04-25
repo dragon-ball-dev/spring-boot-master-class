@@ -1,7 +1,7 @@
 package com.springmasterclass.study.service;
 
 import com.springmasterclass.study.dto.record.CategoryRequest;
-import com.springmasterclass.study.entity.Category;
+import com.springmasterclass.study.entity.product.Category;
 
 public interface CategoryService {
     Category createCategory(CategoryRequest rq);

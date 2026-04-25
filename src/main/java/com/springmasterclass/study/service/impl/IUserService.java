@@ -4,14 +4,13 @@ import com.springmasterclass.study.dto.record.UserRequest;
 import com.springmasterclass.study.dto.record.UserResponse;
 import com.springmasterclass.study.dto.request.UserRq;
 import com.springmasterclass.study.dto.response.UserRp;
-import com.springmasterclass.study.entity.User;
+import com.springmasterclass.study.entity.user.User;
 import com.springmasterclass.study.mapper.UserMapper;
 import com.springmasterclass.study.repository.UserRepository;
 import com.springmasterclass.study.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
