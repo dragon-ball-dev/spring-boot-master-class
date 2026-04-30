@@ -8,5 +8,10 @@ spring:
       jdbc-url: jdbc:postgresql://localhost:5434/product_db
       username: admin
       password: password123
+  main:
+    allow-circular-references: true
 server:
   port: 9090
+jwt:
+  secret: "c2lsdmVyc3ByaW5nYm9vdG5vcm1hbHNlY3VyZWtleW11c3RiZWxvbmc0NTY3ODkwMTIzNDU2Nzg5MDEy"
+  expiration: 3600000   # 1 giờ
