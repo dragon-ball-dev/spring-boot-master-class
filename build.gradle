@@ -55,6 +55,15 @@ dependencies {
     // Spring Security
     implementation 'org.springframework.boot:spring-boot-starter-security'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+
+    // JJWT API
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+
+    // JJWT Implementation (Runtime only)
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+
+    // JJWT Jackson integration (Runtime only for JSON processing)
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 }
 
 tasks.named('test') {
