@@ -10,7 +10,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder // Giúp cho các bạn có thể insert vào User một các dễ dàng hơn thay vì các bạn phải contructor
-public class User {
+public class UserTest {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;

@@ -28,8 +28,9 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 13.B   | Hiểu PERSIST, MERGE, REMOVE, ALL, orphanRemoval – Khi nào dùng? | ✅ Done | [View Code](#) |
 | 14     | Quản lý Database Migration với Flyway trong Spring Boot         | ✅ Done | [View Code](#) |
 | 15     | Phân biệt file YAML vs Properties và cấu hình đa môi trường     | ✅ Done | [View Code](#) |
-| 16     | "NGƯỜI GÁC CỔNG" Spring Security - KIẾN TRÚC LÕI                | ✅ Done | [View Code](#) |
-| **17** | **Vũ khí JWT & Xây dựng Custom Filter** | 🚀 Current | [**Explore**](#) |
+| 16     | "NGƯỜI GÁC CỔNG" Spring Security - KIẾN TRÚC LÕI                |   ✅ Done   |  [View Code](#)  |
+| 17     | Vũ khí JWT & Xây dựng Custom Filter                             |   ✅ Done   |  [View Code](#)  |
+| **18** | **Bộ 3 Quyền Lực: Móc nối Database vào luồng Xác thực**        | 🚀 Current | [**Explore**](#) |
 | ...    | ...                                                             |    ...     |       ...        |
 | 20     | Spring Security & JWT Authentication                            | 🔒 Locked  |        -         |
 

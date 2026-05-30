@@ -1,8 +1,5 @@
 package com.springmasterclass.study.config;
 
-import com.springmasterclass.study.entity.user.Checkup;
-import com.springmasterclass.study.entity.user.Patient;
-import com.springmasterclass.study.entity.user.User;
 import com.springmasterclass.study.repository.PatientRepository;
 import com.springmasterclass.study.repository.UserRepository;
 import jakarta.persistence.EntityManagerFactory;
@@ -26,7 +23,11 @@ import javax.sql.DataSource;
         basePackages = "com.springmasterclass.study.repository",
         includeFilters = @ComponentScan.Filter(
                 type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
-                classes = {UserRepository.class, PatientRepository.class}
+                classes = {
+                        UserRepository.class,
+                        PatientRepository.class,
+                        com.springmasterclass.study.repository.auth.AuthUserRepository.class
+                }
         ),
         excludeFilters = @ComponentScan.Filter(
                 type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
@@ -53,7 +54,7 @@ public class UserDatabaseConfig {
     ) {
         return builder
                 .dataSource(dataSource)
-                .packages("com.springmasterclass.study.entity.user")
+                .packages("com.springmasterclass.study.entity.user", "com.springmasterclass.study.entity.auth")
                 .persistenceUnit("user")
                 .build();
     }
