@@ -1,7 +1,7 @@
 package com.springmasterclass.study.config;
 
 import com.springmasterclass.study.dto.response.UserRp;
-import com.springmasterclass.study.entity.user.User;
+import com.springmasterclass.study.entity.user.UserTest;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
@@ -17,8 +17,8 @@ public class ModelMapperConfig {
         modelMapper.getConfiguration()
                 .setFieldMatchingEnabled(true)
                 .setMatchingStrategy(MatchingStrategies.STRICT);
-        modelMapper.typeMap(User.class, UserRp.class).addMappings(mapper -> {
-            mapper.map(User::getName, UserRp::setName);
+        modelMapper.typeMap(UserTest.class, UserRp.class).addMappings(mapper -> {
+            mapper.map(UserTest::getName, UserRp::setName);
         });
 
         return modelMapper;

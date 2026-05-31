@@ -10,6 +10,7 @@ spring:
       password: password123
   main:
     allow-circular-references: true
+    allow-bean-definition-overriding: true
 server:
   port: 9090
 jwt:
