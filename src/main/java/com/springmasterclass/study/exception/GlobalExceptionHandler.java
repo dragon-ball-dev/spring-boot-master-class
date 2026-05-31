@@ -24,9 +24,9 @@ public class GlobalExceptionHandler {
         return ApiResponse.errorListDataMessages(999, "List of errors column", errors);
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiResponse<Object>> handlerRuntimeException(RuntimeException ex) {
-        ApiResponse<Object> apiResponse = ApiResponse.error(9999, ex.getMessage());
-        return ResponseEntity.badRequest().body(apiResponse);
-    }
+//    @ExceptionHandler(RuntimeException.class)
+//    public ResponseEntity<ApiResponse<Object>> handlerRuntimeException(RuntimeException ex) {
+//        ApiResponse<Object> apiResponse = ApiResponse.error(9999, ex.getMessage());
+//        return ResponseEntity.badRequest().body(apiResponse);
+//    }
 }
