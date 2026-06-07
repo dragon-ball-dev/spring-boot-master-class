@@ -38,4 +38,10 @@ public class DemoController {
     public Authentication getCurrentUser() {
         return SecurityContextHolder.getContext().getAuthentication();
     }
+
+    @DeleteMapping("/patient/delete")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('patient:delete')")
+    public String deletePatient() {
+        return "Xóa hồ sơ bệnh nhân thành công!";
+    }
 }

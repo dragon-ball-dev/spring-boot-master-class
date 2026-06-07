@@ -15,4 +15,5 @@ server:
   port: 9090
 jwt:
   secret: "c2lsdmVyc3ByaW5nYm9vdG5vcm1hbHNlY3VyZWtleW11c3RiZWxvbmc0NTY3ODkwMTIzNDU2Nzg5MDEy"
-  expiration: 3600000   # 1 giờ
+  expiration: 60000   # 1 phut
+  refresh-expiration: 604800000 # 7 ngay --> ms
