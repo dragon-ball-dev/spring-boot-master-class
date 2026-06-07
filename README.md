@@ -30,9 +30,9 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 16     | "NGƯỜI GÁC CỔNG" Spring Security - KIẾN TRÚC LÕI                |   ✅ Done   |  [View Code](#)  |
 | 17     | Vũ khí JWT & Xây dựng Custom Filter                             |   ✅ Done   |  [View Code](#)  |
 | 18     | Bộ 3 Quyền Lực: Móc nối Database vào luồng Xác thực             |   ✅ Done   |  [View Code](#)  |
-| **19** | **Phân quyền RBAC & Xử lý Exception "Chuẩn Doanh Nghiệp"**     | 🚀 Current | [**Explore**](#explore-lesson-19) |
-| ...    | ...                                                             |    ...     |       ...        |
-| 20     | Spring Security & JWT Authentication                            | 🔒 Locked  |        -         |
+| 19     | Phân quyền RBAC & Xử lý Exception "Chuẩn Doanh Nghiệp"          |   ✅ Done   | [View Code](#explore-lesson-19) |
+| **20** | **Kỹ thuật Refresh Token – Giữ phiên đăng nhập "Bất tử"**      | 🚀 Current | [**Explore**](#explore-lesson-20) |
+
 
 ---
 
@@ -342,3 +342,323 @@ Chỉ admin mới thấy được nội dung này!
 * **Bảo mật tối đa**: Ngăn chặn rò rỉ cấu trúc ứng dụng và các thông tin nhạy cảm của Tomcat server.
 * **Đồng nhất dữ liệu API**: Toàn bộ lỗi được định dạng dạng cấu trúc JSON duy nhất (`code` và `message`), giúp lập trình viên Frontend hoặc Mobile dễ dàng xử lý ngoại lệ đồng bộ trên giao diện.
 * **Mở rộng dễ dàng**: Phân quyền chi tiết (Authority-based) giúp hệ thống sẵn sàng nâng cấp lên luồng phân quyền động, quản lý động qua database mà không cần sửa đổi cấu trúc code.
+
+---
+
+<div id="explore-lesson-20"></div>
+
+# 🚀 Bài 20: Kỹ thuật Refresh Token – Giữ phiên đăng nhập "Bất tử"
+
+Trong các hệ thống thực tế (Enterprise Application), việc chỉ sử dụng Access Token (JWT) có thời hạn ngắn (ví dụ: 1 phút đến 15 phút) giúp hạn chế tối đa rủi ro khi token bị lộ. Tuy nhiên, nếu bắt người dùng phải đăng nhập lại liên tục mỗi khi token hết hạn thì trải nghiệm khách hàng sẽ cực kỳ tệ.
+
+Để giải quyết vấn đề này, kỹ thuật **Refresh Token** ra đời. Bài viết này sẽ hướng dẫn cách xây dựng cơ chế cấp mới Access Token tự động thông qua Refresh Token được lưu trữ bảo mật dưới Database, giúp phiên làm việc của người dùng diễn ra liên tục, mượt mà mà vẫn đảm bảo tính an toàn cao nhất.
+
+---
+
+## 💡 Lý thuyết cốt lõi (Core Concepts)
+
+### 1. Tại sao cần Refresh Token?
+* **Access Token (JWT)**: Thường có vòng đời ngắn (Short-lived), chứa thông tin quyền hạn và được gửi kèm theo mọi request API. Vì thường xuyên truyền đi trên môi trường internet, rủi ro bị đánh cắp là rất lớn. Do đó, thời gian hết hạn của Access Token cần đặt ở mức cực kỳ ngắn.
+* **Refresh Token**: Thường có vòng đời dài (Long-lived - ví dụ: 7 ngày, 30 ngày), chỉ dùng một mục đích duy nhất là gửi lên server để yêu cầu cấp lại Access Token mới khi Access Token cũ hết hạn. Refresh Token chỉ truyền qua mạng khi thực hiện làm mới (refresh) token, giảm thiểu đáng kể tần suất hiển thị trên đường truyền.
+* **Cơ chế hoạt động**: Khi Access Token hết hạn (Server trả về `401 Unauthorized`), client (Frontend/App) sẽ tự động gửi Refresh Token ẩn dưới nền để lấy Access Token mới, sau đó thử lại request cũ. Người dùng không hề nhận ra sự gián đoạn này.
+
+### 2. Sơ đồ luồng hoạt động (Token Refresh Lifecycle)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client (Browser/App)
+    participant Server as Spring Boot API
+    participant DB as PostgreSQL Database
+
+    Note over Client,Server: Giai đoạn 1: Đăng nhập thành công
+    Client->>Server: Gửi Login Request (username, password)
+    Server->>DB: Xác thực tài khoản
+    DB-->>Server: OK (User Details)
+    Note over Server: Tạo Access Token (1 phút)<br/>Tạo Refresh Token (7 ngày)
+    Server->>DB: Lưu Refresh Token vào Database
+    Server-->>Client: Trả về { accessToken, refreshToken }
+
+    Note over Client,Server: Giai đoạn 2: Gọi API bình thường
+    Client->>Server: Gửi API Request + Header (Authorization: Bearer <accessToken>)
+    Server-->>Client: Trả về Dữ liệu (200 OK)
+
+    Note over Client,Server: Giai đoạn 3: Access Token Hết Hạn & Tự động Cấp Mới
+    Client->>Server: Gửi API Request + Header (Authorization: Bearer <accessToken đã hết hạn>)
+    Note over Server: Kiểm tra token hết hạn
+    Server-->>Client: Trả về Lỗi 401 Unauthorized (Token expired)
+    
+    Note over Client: Tự động gọi API Refresh (Under the hood)
+    Client->>Server: Gửi POST /api/v1/auth/refresh-token với body { refreshToken }
+    Server->>DB: Kiểm tra Refresh Token tồn tại & hết hạn / thu hồi?
+    DB-->>Server: Hợp lệ (User OK)
+    Note over Server: Tạo Access Token mới (1 phút)
+    Server-->>Client: Trả về { accessToken mới }
+    
+    Note over Client: Gửi lại request ban đầu bị lỗi
+    Client->>Server: Gửi lại API Request + Header (Authorization: Bearer <accessToken mới>)
+    Server-->>Client: Trả về Dữ liệu (200 OK)
+```
+
+### 3. Kỹ thuật Bảo mật & Quản lý Trạng thái Refresh Token
+* **Revocation (Thu hồi)**: Khi người dùng nhấn nút Logout hoặc khi hệ thống phát hiện hành vi đáng ngờ, toàn bộ Refresh Token của User đó sẽ bị xóa/vô hiệu hóa trong database (`revoked = true`).
+* **Database Storage**: Khác với Access Token (Stateless), Refresh Token cần được lưu trữ ở Database (Stateful) để Server kiểm soát được trạng thái và có thể chủ động hủy phiên đăng nhập từ xa.
+
+---
+
+## 🛠️ Chi tiết triển khai mã nguồn (Implementation Details)
+
+### 1. Database Schema
+Bảng `refresh_tokens` liên kết với bảng `users` qua khóa ngoại `user_id`. Tệp migration [V7__create_refresh_tokens_table.sql](file:///d:/study_with_2026/study/src/main/resources/db/migration/user/V7__create_refresh_tokens_table.sql):
+```sql
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    user_id VARCHAR(36) NOT NULL,
+    expiry_date TIMESTAMP NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    CONSTRAINT fk_refresh_token_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### 2. Thực thể RefreshToken (Entity)
+Trong file [RefreshToken.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/entity/auth/RefreshToken.java):
+```java
+@Entity
+@Table(name = "refresh_tokens")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class RefreshToken {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true)
+    private String token;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(nullable = false)
+    private Instant expiryDate;
+
+    private boolean revoked;
+}
+```
+
+### 3. Repository
+Trong file [RefreshTokenRepository.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/repository/auth/RefreshTokenRepository.java):
+```java
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
+    Optional<RefreshToken> findByToken(String token);
+    void deleteAllByUserId(String userId);
+}
+```
+
+### 4. Cấu hình thời gian sống của Token
+Trong file cấu hình [application-dev.yml](file:///d:/study_with_2026/study/src/main/resources/application-dev.yml):
+```yaml
+jwt:
+  secret: "c2lsdmVyc3ByaW5nYm9vdG5vcm1hbHNlY3VyZWtleW11c3RiZWxvbmc0NTY3ODkwMTIzNDU2Nzg5MDEy"
+  expiration: 60000             # Access Token: 1 phút (60,000 ms)
+  refresh-expiration: 604800000 # Refresh Token: 7 ngày (604,800,000 ms)
+```
+
+### 5. Nghiệp vụ Quản lý Refresh Token (Service)
+Trong file [RefreshTokenService.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/security/service/RefreshTokenService.java):
+```java
+@Service
+@RequiredArgsConstructor
+public class RefreshTokenService {
+
+    @Value("${jwt.refresh-expiration}")
+    private Long refreshTokenExpirationMs;
+
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthUserRepository authUserRepository;
+
+    @Transactional
+    public RefreshToken createRefreshToken(String userId) {
+        User user = authUserRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not exist!"));
+
+        // Xóa tất cả token cũ của user để đảm bảo tại một thời điểm chỉ có 1 token hoạt động (hoặc giới hạn phiên)
+        refreshTokenRepository.deleteAllByUserId(userId);
+
+        RefreshToken refreshToken = RefreshToken.builder()
+                .user(user)
+                .token(UUID.randomUUID().toString())
+                .expiryDate(Instant.now().plusMillis(refreshTokenExpirationMs))
+                .revoked(false)
+                .build();
+        return refreshTokenRepository.save(refreshToken);
+    }
+
+    public Optional<RefreshToken> findByToken(String token) {
+        return refreshTokenRepository.findByToken(token);
+    }
+
+    public RefreshToken verifyExpiration(RefreshToken refreshToken) {
+        if (refreshToken.getExpiryDate().compareTo(Instant.now()) < 0) {
+            refreshToken.setRevoked(true);
+            refreshTokenRepository.save(refreshToken);
+            throw new RuntimeException("Refresh token expiry!");
+        }
+        return refreshToken;
+    }
+
+    @Transactional
+    public void revokeAllUserToken(String userId) {
+        refreshTokenRepository.deleteAllByUserId(userId);
+    }
+}
+```
+
+### 6. Controller xử lý luồng Authentication & Refresh
+Trong file [AuthController.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/controller/AuthController.java):
+* **Đăng nhập (`/login`)**: Sinh cả Access Token (ngắn hạn) và Refresh Token (dài hạn), trả về cho client.
+* **Làm mới Token (`/refresh-token`)**: Nhận `refreshToken`, kiểm tra tính hợp lệ và thời hạn, sau đó sinh mới Access Token.
+* **Đăng xuất (`/logout`)**: Vô hiệu hóa/xóa bỏ toàn bộ Refresh Token của user trong database.
+
+```java
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/auth")
+public class AuthController extends BaseController {
+
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
+    private final AuthUserRepository userRepository;
+
+    @PostMapping("/login")
+    public ApiResponse<ResponseEntity<?>> login(@RequestBody LoginRequest loginRequest) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        loginRequest.getUsername(),
+                        loginRequest.getPassword()
+                )
+        );
+
+        User user = (User) authentication.getPrincipal();
+        String accessToken = jwtService.generateToken(user);
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+        
+        return ApiResponse.success(new ResponseEntity<>(Map.of(
+                "accessToken", accessToken,
+                "refreshToken", refreshToken.getToken()
+        ), HttpStatus.OK));
+    }
+
+    @PostMapping("/refresh-token")
+    public ApiResponse<ResponseEntity<?>> refreshToken(@RequestBody Map<String, String> request) {
+        String refreshTokenStr = request.get("refreshToken");
+        if (refreshTokenStr == null) {
+            throw new RuntimeException("Refresh token not null");
+        }
+
+        RefreshToken refreshToken = refreshTokenService.findByToken(refreshTokenStr)
+                .orElseThrow(() -> new RuntimeException("Refresh don't exist"));
+
+        if (refreshToken.isRevoked()) {
+            throw new RuntimeException("Refresh token revoked");
+        }
+
+        RefreshToken verifiedToken = refreshTokenService.verifyExpiration(refreshToken);
+        User user = verifiedToken.getUser();
+        String newAccessToken = jwtService.generateToken(user);
+
+        return ApiResponse.success(new ResponseEntity<>(Map.of(
+                "accessToken", newAccessToken
+        ), HttpStatus.OK));
+    }
+
+    @PostMapping("/logout")
+    public ApiResponse<ResponseEntity<?>> logout(@RequestHeader("Authorization") String authorization) {
+        String token = authorization.substring(7);
+        String username = jwtService.extractUsername(token);
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+                
+        // Thu hồi toàn bộ Refresh Token khi đăng xuất
+        refreshTokenService.revokeAllUserToken(user.getId());
+        
+        return ApiResponse.success(new ResponseEntity<>(Map.of(
+                "message", "Logout Successfully"
+        ), HttpStatus.OK));
+    }
+}
+```
+
+---
+
+## 🚦 Hướng dẫn Kiểm thử & Xác minh (Verification Guide)
+
+### Bước 1: Đăng nhập lấy cặp Token
+Gửi request đăng nhập bằng tài khoản hợp lệ:
+```bash
+curl -X POST http://localhost:9090/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "your_password"}'
+```
+**Phản hồi mong đợi:**
+```json
+{
+  "status": "success",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIs...",
+    "refreshToken": "48b61c92-d66a-493e-868d-8a1a4574ad82"
+  }
+}
+```
+
+### Bước 2: Sử dụng Access Token truy cập tài nguyên bảo mật
+```bash
+curl -X GET http://localhost:9090/api/v1/demo/admin \
+     -H "Authorization: Bearer <accessToken>"
+```
+* Sau khi hết 1 phút (Access Token hết hạn), request tiếp theo sẽ trả về lỗi **401 Unauthorized**.
+
+### Bước 3: Cấp mới Access Token bằng Refresh Token
+Khi Access Token hết hạn, gửi Refresh Token lên endpoint `/refresh-token`:
+```bash
+curl -X POST http://localhost:9090/api/v1/auth/refresh-token \
+     -H "Content-Type: application/json" \
+     -d '{"refreshToken": "48b61c92-d66a-493e-868d-8a1a4574ad82"}'
+```
+**Phản hồi mong đợi:**
+```json
+{
+  "status": "success",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIs..._NEW_TOKEN"
+  }
+}
+```
+* Sử dụng `accessToken` mới này để tiếp tục truy cập các API bình thường.
+
+### Bước 4: Đăng xuất và Thu hồi Token
+Thực hiện đăng xuất để xóa Refresh Token trong cơ sở dữ liệu:
+```bash
+curl -X POST http://localhost:9090/api/v1/auth/logout \
+     -H "Authorization: Bearer <accessToken>"
+```
+**Thử refresh lại sau khi đã logout:**
+Gửi lại Refresh Token cũ lên API làm mới:
+```bash
+curl -X POST http://localhost:9090/api/v1/auth/refresh-token \
+     -H "Content-Type: application/json" \
+     -d '{"refreshToken": "48b61c92-d66a-493e-868d-8a1a4574ad82"}'
+```
+**Phản hồi mong đợi:**
+* Server ném ra biệt lệ (Exception) do Refresh Token đã bị xóa khỏi Database khi thực hiện Logout.
+
+---
+
+## 🎯 Tổng kết giá trị của Kỹ thuật Refresh Token
+* **Cân bằng giữa Bảo mật & UX**: Giúp ứng dụng duy trì bảo mật cao với Access Token vòng đời siêu ngắn, nhưng vẫn mang lại trải nghiệm liền mạch cho người dùng cuối.
+* **Kiểm soát phiên đăng nhập**: Việc lưu trữ Refresh Token trên Database cho phép quản trị viên có thể "hủy quyền" đăng nhập bất cứ khi nào bằng cách xóa token khỏi bảng `refresh_tokens`.
+* **Sẵn sàng cho các tính năng nâng cao**: Dễ dàng nâng cấp thêm các tính năng như: "Đăng xuất khỏi tất cả các thiết bị", "Quản lý thiết bị đang hoạt động (Active Sessions)", hoặc kỹ thuật **Refresh Token Rotation** (tự động cấp mới cả Refresh Token sau mỗi lần gọi refresh).

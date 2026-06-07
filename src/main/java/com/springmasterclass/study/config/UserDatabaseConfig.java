@@ -2,6 +2,7 @@ package com.springmasterclass.study.config;
 
 import com.springmasterclass.study.repository.PatientRepository;
 import com.springmasterclass.study.repository.UserRepository;
+import com.springmasterclass.study.repository.auth.RefreshTokenRepository;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -26,7 +27,8 @@ import javax.sql.DataSource;
                 classes = {
                         UserRepository.class,
                         PatientRepository.class,
-                        com.springmasterclass.study.repository.auth.AuthUserRepository.class
+                        com.springmasterclass.study.repository.auth.AuthUserRepository.class,
+                        RefreshTokenRepository.class
                 }
         ),
         excludeFilters = @ComponentScan.Filter(
