@@ -1,5 +1,6 @@
 package com.springmasterclass.study.config;
 
+import com.springmasterclass.study.repository.DocumentRepository;
 import com.springmasterclass.study.repository.PatientRepository;
 import com.springmasterclass.study.repository.UserRepository;
 import com.springmasterclass.study.repository.auth.RefreshTokenRepository;
@@ -28,12 +29,14 @@ import javax.sql.DataSource;
                         UserRepository.class,
                         PatientRepository.class,
                         com.springmasterclass.study.repository.auth.AuthUserRepository.class,
-                        RefreshTokenRepository.class
+                        RefreshTokenRepository.class,
+                        DocumentRepository.class
                 }
         ),
         excludeFilters = @ComponentScan.Filter(
                 type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
-                classes = {com.springmasterclass.study.repository.ProductRepository.class, com.springmasterclass.study.repository.CategoryRepository.class}
+                classes = {com.springmasterclass.study.repository.ProductRepository.class,
+                        com.springmasterclass.study.repository.CategoryRepository.class}
         ),
         entityManagerFactoryRef = "userEntityManagerFactory",
         transactionManagerRef = "userTransactionManager"
