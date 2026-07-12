@@ -1,5 +1,6 @@
 package com.springmasterclass.study.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springmasterclass.study.dto.response.UserRp;
 import com.springmasterclass.study.entity.user.UserTest;
 import org.modelmapper.ModelMapper;
@@ -22,5 +23,10 @@ public class ModelMapperConfig {
         });
 
         return modelMapper;
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 }

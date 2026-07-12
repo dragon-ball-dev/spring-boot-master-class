@@ -31,7 +31,8 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 17     | Vũ khí JWT & Xây dựng Custom Filter                             |   ✅ Done   |  [View Code](#)  |
 | 18     | Bộ 3 Quyền Lực: Móc nối Database vào luồng Xác thực             |   ✅ Done   |  [View Code](#)  |
 | 19     | Phân quyền RBAC & Xử lý Exception "Chuẩn Doanh Nghiệp"          |   ✅ Done   | [View Code](#explore-lesson-19) |
-| **20** | **Kỹ thuật Refresh Token – Giữ phiên đăng nhập "Bất tử"**      | 🚀 Current | [**Explore**](#explore-lesson-20) |
+| 20     | Kỹ thuật Refresh Token – Giữ phiên đăng nhập "Bất tử"           |   ✅ Done   | [View Code](#explore-lesson-20) |
+| **21** | **Mã hóa Lai (Hybrid Encryption) & Lưu trữ File (MinIO)**      | 🚀 Current | [**Explore**](#explore-lesson-21) |
 
 
 ---
@@ -661,4 +662,328 @@ curl -X POST http://localhost:9090/api/v1/auth/refresh-token \
 ## 🎯 Tổng kết giá trị của Kỹ thuật Refresh Token
 * **Cân bằng giữa Bảo mật & UX**: Giúp ứng dụng duy trì bảo mật cao với Access Token vòng đời siêu ngắn, nhưng vẫn mang lại trải nghiệm liền mạch cho người dùng cuối.
 * **Kiểm soát phiên đăng nhập**: Việc lưu trữ Refresh Token trên Database cho phép quản trị viên có thể "hủy quyền" đăng nhập bất cứ khi nào bằng cách xóa token khỏi bảng `refresh_tokens`.
-* **Sẵn sàng cho các tính năng nâng cao**: Dễ dàng nâng cấp thêm các tính năng như: "Đăng xuất khỏi tất cả các thiết bị", "Quản lý thiết bị đang hoạt động (Active Sessions)", hoặc kỹ thuật **Refresh Token Rotation** (tự động cấp mới cả Refresh Token sau mỗi lần gọi refresh).
+* **Sẵn sàng cho các tính năng nâng cao**: Dễ dàng nâng cấp thêm các tính năng như: "Đăng xuất khỏi tất cả các thiết bị", "Quản lý thiết bị đang hoạt động (Active Sessions)", hoặc kỹ thuật **Refresh Token Rotation** (tự động cấp mới cả Refresh Token sau mỗi lần gọi refresh).
+
+---
+
+<div id="explore-lesson-21"></div>
+
+# 🚀 Bài 21: Kỹ thuật Mã hóa Lai (Hybrid Encryption) & Lưu trữ File An toàn (MinIO)
+
+Trong các ứng dụng doanh nghiệp (Enterprise Applications), bảo mật dữ liệu nhạy cảm và tệp tin đính kèm là một yêu cầu cực kỳ quan trọng. Nếu chỉ sử dụng một thuật toán mã hóa đối xứng (Symmetric Encryption như AES) cho toàn hệ thống, ta sẽ gặp bài toán khó về quản lý khóa (Key Management) và phân phối khóa. Ngược lại, nếu chỉ dùng mã hóa bất đối xứng (Asymmetric Encryption như RSA) thì hiệu năng sẽ cực kỳ thấp và không thể mã hóa được các tệp tin/dữ liệu có kích thước lớn.
+
+Kỹ thuật **Mã hóa Lai (Hybrid Encryption)** ra đời để giải quyết triệt để vấn đề này bằng cách kết hợp ưu điểm của cả hai thế giới: tốc độ vượt trội của AES và khả năng phân phối khóa bảo mật của RSA.
+
+---
+
+## 💡 Lý thuyết cốt lõi (Core Concepts)
+
+### 1. Tại sao cần Mã hóa Lai (Hybrid Encryption)?
+* **Mã hóa đối xứng (AES-GCM-256)**: 
+  - *Ưu điểm*: Tốc độ mã hóa/giải mã cực kỳ nhanh, phù hợp cho tệp tin lớn và dữ liệu dung lượng cao.
+  - *Nhược điểm*: Client và Server phải chia sẻ cùng một khóa bí mật (Symmetric Key). Nếu khóa này bị lộ, toàn bộ dữ liệu sẽ bị giải mã trái phép.
+* **Mã hóa bất đối xứng (RSA-2048)**:
+  - *Ưu điểm*: Sử dụng cặp khóa Public Key (để mã hóa, có thể chia sẻ rộng rãi) và Private Key (để giải mã, giữ bí mật tuyệt đối trên Server). Không cần chia sẻ khóa giải mã qua môi trường mạng.
+  - *Nhược điểm*: Tốc độ xử lý rất chậm. Giới hạn độ dài dữ liệu mã hóa (khóa RSA 2048-bit chỉ có thể mã hóa trực tiếp khối dữ liệu tối đa khoảng 245 bytes).
+* **Mã hóa Lai (Hybrid Encryption)**:
+  - Mỗi khi cần mã hóa một tài liệu/tệp tin, hệ thống sẽ sinh ra một khóa đối xứng AES dùng một lần (Ephemeral Key/Session Key) và một Vector khởi tạo ngẫu nhiên (IV - Initialization Vector).
+  - Dữ liệu thực tế được mã hóa bằng thuật toán đối xứng AES-GCM với Session Key vừa sinh.
+  - Session Key này sau đó được mã hóa bằng thuật toán bất đối xứng RSA với **Public Key** của người nhận (hoặc của Server).
+  - Kết quả lưu trữ/truyền đi sẽ bao gồm: Khóa AES đã mã hóa (Encrypted Key), Vector IV và Dữ liệu đã mã hóa (Encrypted Payload).
+
+### 2. Sơ đồ luồng hoạt động (Data Flow & Encryption Flow)
+
+```mermaid
+graph TD
+    subgraph Quy trình Mã hóa (Encryption Flow)
+        Plaintext[Dữ liệu gốc / File] -->|Mã hóa AES-256-GCM| EncryptedData[Encrypted Data]
+        AESKey[Khóa AES ngẫu nhiên] -->|Mã hóa RSA Public Key| EncryptedKey[Encrypted AES Key]
+        IV[Vector IV 12 bytes] --> Combined[Combined Payload: Key + IV + Data]
+        EncryptedData --> Combined
+        EncryptedKey --> Combined
+    end
+    
+    subgraph Quy trình Giải mã (Decryption Flow)
+        Combined2[Combined Payload] -->|Tách chuỗi bằng kí tự phân tách| EncKey[Encrypted AES Key]
+        Combined2 --> IV2[IV]
+        Combined2 --> EncData[Encrypted Data]
+        EncKey -->|Giải mã RSA Private Key| DecKey[Decrypted AES Key]
+        DecKey & IV2 & EncData -->|Giải mã AES-256-GCM| Original[Dữ liệu gốc / File]
+    end
+```
+
+---
+
+## 🛠️ Chi tiết triển khai mã nguồn (Implementation Details)
+
+### 1. Khai báo thư viện (build.gradle)
+Cần bổ sung thư viện **BouncyCastle** để làm việc dễ dàng với định dạng PEM (xử lý Public/Private Key) và **MinIO Client** để lưu trữ tệp tin.
+
+Trong [build.gradle](file:///d:/study_with_2026/study/build.gradle):
+```groovy
+dependencies {
+    // BouncyCastle để đọc khóa định dạng PEM
+    implementation 'org.bouncycastle:bcpkix-jdk15on:1.70'
+
+    // MinIO Java SDK để upload/download file
+    implementation 'io.minio:minio:8.5.7'
+}
+```
+
+### 2. Sinh cặp khóa RSA (KeyGeneratorUtil)
+Trước khi chạy ứng dụng, ta sử dụng một công cụ tiện ích để sinh cặp khóa RSA 2048-bit và lưu dưới định dạng PEM chuẩn.
+
+Trong file [KeyGeneratorUtil.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/common/KeyGeneratorUtil.java):
+```java
+public class KeyGeneratorUtil {
+    public static void main(String[] args) throws Exception {
+        File keysDir = new File("src/main/resources/keys");
+        if (!keysDir.exists()) { keysDir.mkdirs(); }
+
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+        
+        // Ghi khóa công khai (Public Key)
+        try (FileOutputStream fos = new FileOutputStream(new File(keysDir, "public_key.pem"))) {
+            fos.write("-----BEGIN PUBLIC KEY-----\n".getBytes());
+            fos.write(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
+            fos.write("\n-----END PUBLIC KEY-----\n".getBytes());
+        }
+
+        // Ghi khóa bí mật (Private Key)
+        try (FileOutputStream fos = new FileOutputStream(new File(keysDir, "private_key.pem"))) {
+            fos.write("-----BEGIN PRIVATE KEY-----\n".getBytes());
+            fos.write(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
+            fos.write("\n-----END PRIVATE KEY-----\n".getBytes());
+        }
+    }
+}
+```
+
+### 3. Dịch vụ Mã hóa Lai (HybridEncryptionService)
+Lớp dịch vụ này chịu trách nhiệm mã hóa và giải mã mảng byte sử dụng thuật toán lai kết hợp RSA-2048 và AES-GCM-256.
+
+Trong file [HybridEncryptionService.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/common/HybridEncryptionService.java):
+```java
+@Service
+public class HybridEncryptionService {
+    private final PrivateKey privateKey;
+    private final PublicKey publicKey;
+
+    public HybridEncryptionService() throws Exception {
+        this.privateKey = readPrivateKey();
+        this.publicKey = readPublicKey();
+    }
+
+    // Đọc Public Key từ file PEM
+    private PublicKey readPublicKey() throws Exception {
+        try (PemReader reader = new PemReader(new FileReader("src/main/resources/keys/public_key.pem"))) {
+            PemObject pem = reader.readPemObject();
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pem.getContent()));
+        }
+    }
+
+    // Đọc Private Key từ file PEM
+    private PrivateKey readPrivateKey() throws Exception {
+        try (PemReader reader = new PemReader(new FileReader("src/main/resources/keys/private_key.pem"))) {
+            PemObject pem = reader.readPemObject();
+            return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(pem.getContent()));
+        }
+    }
+
+    public EncryptedData encrypt(byte[] plaintext) throws Exception {
+        // 1. Sinh khóa đối xứng AES 256-bit ngẫu nhiên
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(256);
+        SecretKey aesKey = keyGen.generateKey();
+
+        // 2. Sinh IV ngẫu nhiên (12 bytes cho chế độ GCM)
+        byte[] iv = new byte[12];
+        new SecureRandom().nextBytes(iv);
+
+        // 3. Mã hóa dữ liệu bằng AES-GCM
+        Cipher aesCipher = Cipher.getInstance("AES/GCM/NoPadding");
+        aesCipher.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
+        byte[] encryptedPayload = aesCipher.doFinal(plaintext);
+
+        // 4. Mã hóa khóa AES bằng RSA Public Key
+        Cipher rsaCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        rsaCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        byte[] encryptedKey = rsaCipher.doFinal(aesKey.getEncoded());
+
+        return new EncryptedData(
+            Base64.getEncoder().encodeToString(encryptedKey),
+            Base64.getEncoder().encodeToString(iv),
+            Base64.getEncoder().encodeToString(encryptedPayload)
+        );
+    }
+
+    public byte[] decrypt(EncryptedData encryptedData) throws Exception {
+        byte[] encryptedKey = Base64.getDecoder().decode(encryptedData.encryptedKey());
+        byte[] iv = Base64.getDecoder().decode(encryptedData.iv());
+        byte[] encryptedPayload = Base64.getDecoder().decode(encryptedData.encryptedData());
+
+        // 1. Giải mã khóa AES sử dụng RSA Private Key
+        Cipher rsaCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        rsaCipher.init(Cipher.DECRYPT_MODE, privateKey);
+        byte[] aesKeyBytes = rsaCipher.doFinal(encryptedKey);
+        SecretKey aesKey = new SecretKeySpec(aesKeyBytes, "AES");
+
+        // 2. Giải mã dữ liệu sử dụng AES-GCM
+        Cipher aesCipher = Cipher.getInstance("AES/GCM/NoPadding");
+        aesCipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
+        return aesCipher.doFinal(encryptedPayload);
+    }
+}
+```
+
+### 4. Dịch vụ lưu trữ tệp mã hóa (FileStorageService)
+Lớp dịch vụ này mã hóa tệp tin trước khi tải lên MinIO và giải mã tệp tin sau khi tải về. Ta ghép ba thành phần `encryptedKey`, `iv`, và `encryptedData` lại thành một chuỗi duy nhất, phân tách bằng kí tự `||`.
+
+Trong file [FileStorageService.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/common/FileStorageService.java):
+```java
+@Service
+public class FileStorageService {
+    @Value("${minio.bucket}")
+    private String bucketName;
+    private final MinioClient minioClient;
+    private final HybridEncryptionService encryptionService;
+
+    public FileStorageService(HybridEncryptionService encryptionService) {
+        this.encryptionService = encryptionService;
+        this.minioClient = MinioClient.builder()
+                .endpoint("http://localhost:9000")
+                .credentials("minioadmin", "minioadmin")
+                .build();
+    }
+
+    public String uploadEncryptedFile(MultipartFile file, String fileName) throws Exception {
+        byte[] fileBytes = file.getBytes();
+        EncryptedData encrypted = encryptionService.encrypt(fileBytes);
+
+        // Ghép khóa, IV và dữ liệu đã mã hóa
+        String combined = encrypted.encryptedKey() + "||" 
+                         + encrypted.iv() + "||" 
+                         + encrypted.encryptedData();
+
+        try (InputStream is = new ByteArrayInputStream(combined.getBytes())) {
+            minioClient.putObject(
+                PutObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(fileName)
+                    .stream(is, combined.length(), -1)
+                    .contentType(file.getContentType())
+                    .build()
+            );
+        }
+        return fileName;
+    }
+
+    public byte[] downloadDecryptedFile(String fileName) throws Exception {
+        try (InputStream is = minioClient.getObject(
+                GetObjectArgs.builder().bucket(bucketName).object(fileName).build())) {
+            byte[] content = is.readAllBytes();
+            String[] parts = new String(content).split("\\|\\|");
+            if (parts.length != 3) {
+                throw new RuntimeException("Invalid encrypted file format");
+            }
+            EncryptedData encrypted = new EncryptedData(parts[0], parts[1], parts[2]);
+            return encryptionService.decrypt(encrypted);
+        }
+    }
+}
+```
+
+### 5. Controller tiếp nhận yêu cầu (DocumentController)
+Cung cấp API để thêm mới tài liệu (chỉ dành cho `ADMIN` hoặc `MANAGER`) và lấy tài liệu kèm giải mã tự động (dành cho `ADMIN`, `MANAGER`, `USER`).
+
+Trong file [DocumentController.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/controller/DocumentController.java):
+```java
+@RestController
+@RequestMapping("/api/v1/documents")
+@RequiredArgsConstructor
+public class DocumentController {
+    private final DocumentService documentService;
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<?> createDocument(@ModelAttribute DocumentDto dto) throws Exception {
+        Document saved = documentService.saveDocument(dto);
+        return ResponseEntity.ok(Map.of(
+            "id", saved.getId(),
+            "message", "Tài liệu đã được lưu và mã hóa thành công!"
+        ));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    public ResponseEntity<?> getDocument(@PathVariable Long id) throws Exception {
+        DocumentDto dto = documentService.getDocument(id);
+        return ResponseEntity.ok(dto);
+    }
+}
+```
+
+---
+
+## 🚦 Hướng dẫn Kiểm thử & Xác minh (Verification Guide)
+
+### Bước 1: Khởi động MinIO và tạo Bucket
+Khởi chạy dịch vụ MinIO bằng docker:
+```bash
+docker run -d -p 9000:9000 -p 9001:9001 --name minio \
+  -e "MINIO_ROOT_USER=minioadmin" \
+  -e "MINIO_ROOT_PASSWORD=minioadmin" \
+  minio/minio server /data --console-address ":9001"
+```
+Truy cập vào bảng điều khiển MinIO Console (`http://localhost:9001`), đăng nhập bằng tài khoản `minioadmin/minioadmin`, và tạo một bucket mới tên là `documents`.
+
+### Bước 2: Sinh cặp khóa RSA
+Biên dịch và chạy lớp `KeyGeneratorUtil` để tạo thư mục `src/main/resources/keys` chứa `public_key.pem` và `private_key.pem`.
+
+### Bước 3: Tạo mới Tài liệu và tải lên File đính kèm (Mã hóa)
+Sử dụng cURL hoặc Postman gửi yêu cầu POST đến `/api/v1/documents` dưới dạng `multipart/form-data`. Hãy nhớ đính kèm token của người dùng có vai trò `ADMIN` hoặc `MANAGER`:
+
+```bash
+curl -X POST http://localhost:9090/api/v1/documents \
+     -H "Authorization: Bearer <ADMIN_OR_MANAGER_JWT_TOKEN>" \
+     -F "title=Báo cáo doanh thu Q2" \
+     -F "author=Nguyễn Văn A" \
+     -F "department=Tài chính" \
+     -F "content=Nội dung tuyệt mật về kế hoạch doanh thu năm 2026..." \
+     -F "attachmentFile=@/path/to/your/secret_report.pdf"
+```
+
+**Kết quả mong đợi:**
+* Trả về HTTP Status 200 OK với JSON chứa ID tài liệu vừa tạo.
+* Kiểm tra Database: Bảng `documents` sẽ có bản ghi mới, trong đó cột `encrypted_payload` chứa chuỗi JSON đại diện cho khóa AES đã được mã hóa, IV và dữ liệu văn bản đã được mã hóa. Nội dung gốc dạng plaintext hoàn toàn không xuất hiện trong Database.
+* Kiểm tra MinIO: Tệp tin được lưu trong bucket `documents`. Khi tải xuống trực tiếp từ MinIO, tệp tin này hoàn toàn không thể đọc được bằng các phần mềm đọc PDF thông thường vì cấu trúc tệp đã bị xáo trộn và định dạng mã hóa lai.
+
+### Bước 4: Truy vấn và Tự động Giải mã tài liệu
+Gửi yêu cầu GET đến `/api/v1/documents/{id}` với JWT hợp lệ:
+
+```bash
+curl -X GET http://localhost:9090/api/v1/documents/1 \
+     -H "Authorization: Bearer <ANY_USER_JWT_TOKEN>"
+```
+
+**Kết quả mong đợi (HTTP Status 200 OK):**
+```json
+{
+  "title": "Báo cáo doanh thu Q2",
+  "author": "Nguyễn Văn A",
+  "department": "Tài chính",
+  "content": "Nội dung tuyệt mật về kế hoạch doanh thu năm 2026...",
+  "attachmentFile": null
+}
+```
+*Hệ thống tự động đọc dữ liệu mã hóa từ cơ sở dữ liệu, dùng Private Key giải mã khóa AES, sau đó dùng khóa AES giải mã nội dung text để trả về cho người dùng.*
+
+---
+
+## 🎯 Tổng kết giá trị của Kỹ thuật Mã hóa Lai & MinIO
+* **Bảo mật tối đa dữ liệu tĩnh (Data-at-Rest)**: Ngăn ngừa rò rỉ thông tin ngay cả khi hacker truy cập được vào cơ sở dữ liệu vật lý hoặc hệ thống lưu trữ tệp (MinIO/S3).
+* **Quản lý khóa linh hoạt**: Không cần chia sẻ khóa giải mã giữa nhiều bên. Khóa giải mã duy nhất (RSA Private Key) được lưu cực kỳ an toàn trên Server.
+* **Hiệu năng ấn tượng**: Tận dụng tối đa tốc độ phần cứng của thuật toán mã hóa đối xứng AES đối với tệp tin và dữ liệu lớn.
+
