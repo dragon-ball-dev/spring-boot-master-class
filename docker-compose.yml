@@ -30,6 +30,17 @@ services:
       - mysql_data:/var/lib/mysql
     restart: always
 
+  # Cấu hình cho Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis_container
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: always
+
 volumes:
   postgres_data:
   mysql_data:
