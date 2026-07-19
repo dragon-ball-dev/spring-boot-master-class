@@ -32,7 +32,8 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 18     | Bộ 3 Quyền Lực: Móc nối Database vào luồng Xác thực             |   ✅ Done   |  [View Code](#)  |
 | 19     | Phân quyền RBAC & Xử lý Exception "Chuẩn Doanh Nghiệp"          |   ✅ Done   | [View Code](#explore-lesson-19) |
 | 20     | Kỹ thuật Refresh Token – Giữ phiên đăng nhập "Bất tử"           |   ✅ Done   | [View Code](#explore-lesson-20) |
-| **21** | **Mã hóa Lai (Hybrid Encryption) & Lưu trữ File (MinIO)**      | 🚀 Current | [**Explore**](#explore-lesson-21) |
+| 21     | Mã hóa Lai (Hybrid Encryption) & Lưu trữ File (MinIO)          |   ✅ Done   | [View Code](#explore-lesson-21) |
+| **22** | **Tích hợp Redis & Thao tác Cấu trúc Dữ liệu (String, Hash, List)** | 🚀 Current | [**Explore**](#explore-lesson-22) |
 
 
 ---
@@ -986,4 +987,381 @@ curl -X GET http://localhost:9090/api/v1/documents/1 \
 * **Bảo mật tối đa dữ liệu tĩnh (Data-at-Rest)**: Ngăn ngừa rò rỉ thông tin ngay cả khi hacker truy cập được vào cơ sở dữ liệu vật lý hoặc hệ thống lưu trữ tệp (MinIO/S3).
 * **Quản lý khóa linh hoạt**: Không cần chia sẻ khóa giải mã giữa nhiều bên. Khóa giải mã duy nhất (RSA Private Key) được lưu cực kỳ an toàn trên Server.
 * **Hiệu năng ấn tượng**: Tận dụng tối đa tốc độ phần cứng của thuật toán mã hóa đối xứng AES đối với tệp tin và dữ liệu lớn.
+
+---
+
+<div id="explore-lesson-22"></div>
+
+# 🚀 Bài 22: Tích hợp Redis & Thao tác Cấu trúc Dữ liệu (String, Hash, List)
+
+Trong các hệ thống phân tán và ứng dụng quy mô lớn, tối ưu hóa hiệu năng và giảm tải cho Database quan hệ (như PostgreSQL, MySQL) là cực kỳ cấp thiết. **Redis (Remote Dictionary Server)** - một hệ thống lưu trữ dữ liệu dạng Key-Value trong bộ nhớ (In-Memory Database) có hiệu năng đọc/ghi siêu tốc - chính là giải pháp hàng đầu được lựa chọn để làm Cache hoặc lưu trữ trạng thái phiên làm việc (Session).
+
+Bài học này hướng dẫn chi tiết cách tích hợp Redis vào dự án Spring Boot, cấu hình các bộ tuần tự hóa (Serializers) chuẩn xác và thao tác với các cấu trúc dữ liệu phổ biến của Redis: String, Hash và List.
+
+---
+
+## 💡 Lý thuyết cốt lõi (Core Concepts)
+
+### 1. Tại sao cần tích hợp Redis?
+* **Hiệu năng vượt trội**: Dữ liệu lưu hoàn toàn trên RAM giúp truy xuất với độ trễ micro giây (< 1ms).
+* **Cơ chế Time-To-Live (TTL)**: Cho phép cấu hình thời gian hết hạn tự động cho từng Key, rất phù hợp cho lưu trữ Cache, Token OTP, hay Session.
+* **Cấu trúc dữ liệu đa dạng**: Không chỉ lưu trữ Key-Value dạng chuỗi thuần túy (String), Redis hỗ trợ phong phú các cấu trúc phức tạp như Hash (lưu đối tượng), List (hàng đợi/ngăn xếp), Set, Sorted Set, HyperLogLog, v.v.
+
+### 2. Phân biệt `RedisTemplate` vs `StringRedisTemplate`
+Trong Spring Data Redis, chúng ta có hai công cụ chính để giao tiếp với Redis:
+* **`StringRedisTemplate`**: Được Spring cấu hình sẵn, chuyên dùng khi cả Key và Value đều là dạng String (`RedisTemplate<String, String>`). Nó sử dụng `StringRedisSerializer` cho cả Key và Value.
+* **`RedisTemplate<String, Object>`**: Linh hoạt hơn, cho phép lưu trữ các đối tượng Java (Objects). Tuy nhiên, cần cấu hình thủ công Serializer để chuyển đổi đối tượng Java thành byte lưu trữ trên Redis và ngược lại. Nếu không cấu hình, Spring sẽ dùng `JdkSerializationRedisSerializer` mặc định, dẫn đến dữ liệu lưu trữ bị mã hóa thành ký tự nhị phân rất khó đọc khi dùng các công cụ GUI như Redis Insight hay CLI.
+  - *Giải pháp Chuẩn*: Sử dụng `StringRedisSerializer` cho Key (và HashKey), sử dụng `JacksonJsonRedisSerializer` hoặc `GenericJackson2JsonRedisSerializer` cho Value (và HashValue) để lưu dữ liệu dưới định dạng JSON rõ ràng.
+
+### 3. Sơ đồ tương tác (System Interaction Flow)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client / Tester
+    participant App as Spring Boot App
+    participant Redis as Redis Cache (Port 6379)
+
+    Note over Client,Redis: Thao tác dữ liệu String & TTL
+    Client->>App: Gửi POST /api/v1/redis/set-ttl (key, value, ttl=60s)
+    App->>Redis: Lưu Key với thời hạn TTL (60 giây)
+    Redis-->>App: OK
+    App-->>Client: Trả về thông báo thành công
+
+    Note over Client,Redis: Đọc dữ liệu từ Redis
+    Client->>App: Gửi GET /api/v1/redis/get (key)
+    App->>Redis: Lấy giá trị của Key
+    alt Key chưa hết hạn (TTL > 0)
+        Redis-->>App: Trả về Value
+        App-->>Client: Trả về JSON { key, value }
+    else Key đã hết hạn hoặc không tồn tại
+        Redis-->>App: Trả về null
+        App-->>Client: Trả về thông báo Key không tồn tại
+    end
+```
+
+---
+
+## 🛠️ Chi tiết triển khai mã nguồn (Implementation Details)
+
+### 1. Khai báo thư viện (build.gradle)
+Bổ sung starter cho Spring Data Redis.
+
+Trong file [build.gradle](file:///d:/study_with_2026/study/build.gradle):
+```groovy
+dependencies {
+    // Spring Data Redis starter
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+}
+```
+
+### 2. Cấu hình Docker (docker-compose.yml)
+Thêm dịch vụ Redis để chạy local thông qua Docker Container.
+
+Trong [docker-compose.yml](file:///d:/study_with_2026/study/docker-compose.yml):
+```yaml
+  # Cấu hình cho Redis
+  redis:
+    image: redis:7-alpine
+    container_name: redis_container
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  postgres_data:
+  mysql_data:
+  redis_data: # Khai báo volume lưu trữ persistent cho Redis
+```
+
+### 3. Cấu hình kết nối (application-dev.yml)
+Khai báo địa chỉ host và port của Redis Server.
+
+Trong file [application-dev.yml](file:///d:/study_with_2026/study/src/main/resources/application-dev.yml):
+```yaml
+spring:
+  redis:
+    host: localhost
+    port: 6379
+```
+
+### 4. Cấu hình Serializers (RedisConfig)
+Cấu hình tùy biến Bean `RedisTemplate<String, Object>` để lưu trữ và hiển thị dữ liệu dạng JSON thay vì nhị phân JDK mặc định.
+
+Trong file [RedisConfig.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/config/RedisConfig.java):
+```java
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        // Serialize Key dưới dạng String thuần túy
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+
+        // Serialize Value dưới dạng JSON thông qua Jackson
+        template.setValueSerializer(new JacksonJsonRedisSerializer<>(Object.class));
+        template.setHashValueSerializer(new JacksonJsonRedisSerializer<>(Object.class));
+        
+        return template;
+    }
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
+        return new StringRedisTemplate(redisConnectionFactory);
+    }
+}
+```
+
+### 5. Dịch vụ hỗ trợ Redis (RedisService)
+Tạo lớp Wrapper đóng gói các thao tác thường gặp trên Redis để sử dụng dễ dàng trong Business logic.
+
+Trong file [RedisService.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/common/RedisService.java):
+```java
+@Service
+@RequiredArgsConstructor
+public class RedisService {
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
+
+    // --- Key-Value Operations ---
+    public void set(String key, Object value) {
+        redisTemplate.opsForValue().set(key, value);
+    }
+
+    public void setWithTTL(String key, Object value, long timeout, TimeUnit timeUnit) {
+        redisTemplate.opsForValue().set(key, value, timeout, timeUnit);
+    }
+
+    public Object get(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
+
+    public Boolean delete(String key) {
+        return redisTemplate.delete(key);
+    }
+
+    public Boolean hasKey(String key) {
+        return redisTemplate.hasKey(key);
+    }
+
+    // --- String Operations (StringRedisTemplate) ---
+    public void setString(String key, String value) {
+        stringRedisTemplate.opsForValue().set(key, value);
+    }
+
+    public void setStringWithTTL(String key, String value, long timeout, TimeUnit unit) {
+        stringRedisTemplate.opsForValue().set(key, value, timeout, unit);
+    }
+
+    public String getString(String key) {
+        return stringRedisTemplate.opsForValue().get(key);
+    }
+
+    // --- Hash Operations (Lưu đối tượng nhiều trường) ---
+    public void putHash(String key, String hashKey, Object value) {
+        redisTemplate.opsForHash().put(key, hashKey, value);
+    }
+
+    public Object getHash(String key, String hashKey) {
+        return redisTemplate.opsForHash().get(key, hashKey);
+    }
+
+    // --- List Operations (Hàng đợi Queue / Push & Pop) ---
+    public void pushToList(String key, Object value) {
+        redisTemplate.opsForList().rightPush(key, value);
+    }
+
+    public Object popFromList(String key) {
+        return redisTemplate.opsForList().leftPop(key);
+    }
+
+    public Long getListSize(String key) {
+        return redisTemplate.opsForList().size(key);
+    }
+}
+```
+
+### 6. REST API Endpoint (RedisController)
+Cung cấp các API kiểm thử trực quan thông qua Swagger hoặc cURL.
+
+Trong file [RedisController.java](file:///d:/study_with_2026/study/src/main/java/com/springmasterclass/study/controller/RedisController.java):
+```java
+@RestController
+@RequestMapping("/api/v1/redis")
+@RequiredArgsConstructor
+public class RedisController {
+    private final RedisService redisService;
+
+    // Ghi dữ liệu vô thời hạn
+    @PostMapping("/set")
+    public String set(@RequestParam String key, @RequestParam String value) {
+        redisService.set(key, value);
+        return "Set thành công: " + key + " = " + value;
+    }
+
+    // Ghi dữ liệu kèm TTL (giây)
+    @PostMapping("/set-ttl")
+    public String setWithTTL(@RequestParam String key, 
+                             @RequestParam String value,
+                             @RequestParam(defaultValue = "60") long ttl) {
+        redisService.setWithTTL(key, value, ttl, TimeUnit.SECONDS);
+        return "Set thành công với TTL " + ttl + "s: " + key + " = " + value;
+    }
+
+    // Đọc dữ liệu
+    @GetMapping("/get")
+    public Object get(@RequestParam String key) {
+        Object value = redisService.get(key);
+        if (value == null) {
+            return Map.of("message", "Key không tồn tại hoặc đã hết hạn: " + key);
+        }
+        return Map.of("key", key, "value", value);
+    }
+
+    // Xóa Key
+    @DeleteMapping("/delete")
+    public String delete(@RequestParam String key) {
+        Boolean deleted = redisService.delete(key);
+        return deleted ? "Xóa thành công: " + key : "Key không tồn tại: " + key;
+    }
+
+    // Kiểm tra sự tồn tại của Key
+    @GetMapping("/exists")
+    public Map<String, Object> exists(@RequestParam String key) {
+        return Map.of("key", key, "exists", redisService.hasKey(key));
+    }
+
+    // Ghi dữ liệu vào cấu trúc Hash
+    @PostMapping("/hash")
+    public String putHash(@RequestParam String key, 
+                          @RequestParam String field, 
+                          @RequestParam String value) {
+        redisService.putHash(key, field, value);
+        return "Hash set thành công: " + key + "." + field + " = " + value;
+    }
+
+    // Đọc dữ liệu từ cấu trúc Hash
+    @GetMapping("/hash")
+    public Object getHash(@RequestParam String key, @RequestParam String field) {
+        Object value = redisService.getHash(key, field);
+        if (value == null) {
+            return Map.of("message", "Field không tồn tại: " + field);
+        }
+        return Map.of("key", key, "field", field, "value", value);
+    }
+
+    // Thêm phần tử vào cuối List
+    @PostMapping("/list")
+    public String pushToList(@RequestParam String key, @RequestParam String value) {
+        redisService.pushToList(key, value);
+        return "Push thành công vào list " + key + ": " + value;
+    }
+
+    // Lấy phần tử đầu tiên ra khỏi List (Pop)
+    @GetMapping("/list")
+    public Object popFromList(@RequestParam String key) {
+        Object value = redisService.popFromList(key);
+        if (value == null) {
+            return Map.of("message", "List rỗng hoặc không tồn tại: " + key);
+        }
+        return Map.of("key", key, "popped", value);
+    }
+}
+```
+
+---
+
+## 🚦 Hướng dẫn Kiểm thử & Xác minh (Verification Guide)
+
+### Bước 1: Chạy Redis Container
+Khởi chạy dịch vụ Redis được định nghĩa trong docker-compose:
+```bash
+docker-compose up -d redis
+```
+Kiểm tra trạng thái container đang hoạt động tốt:
+```bash
+docker ps | grep redis
+```
+
+### Bước 2: Test API String & TTL
+1. **Lưu Key không có TTL**:
+   ```bash
+   curl -X POST "http://localhost:9090/api/v1/redis/set?key=author&value=Antigravity"
+   ```
+2. **Lưu Key kèm TTL 10 giây**:
+   ```bash
+   curl -X POST "http://localhost:9090/api/v1/redis/set-ttl?key=tempToken&value=secret123&ttl=10"
+   ```
+3. **Đọc Key lập tức**:
+   ```bash
+   curl -X GET "http://localhost:9090/api/v1/redis/get?key=tempToken"
+   # Trả về: {"key":"tempToken","value":"secret123"}
+   ```
+4. **Đọc lại Key sau 10 giây**:
+   ```bash
+   curl -X GET "http://localhost:9090/api/v1/redis/get?key=tempToken"
+   # Trả về thông báo: {"message":"Key không tồn tại hoặc đã hết hạn: tempToken"}
+   ```
+
+### Bước 3: Test API Hash (Đối tượng)
+1. **Lưu các trường của đối tượng người dùng**:
+   ```bash
+   curl -X POST "http://localhost:9090/api/v1/redis/hash?key=user:100&field=name&value=Nghiem"
+   curl -X POST "http://localhost:9090/api/v1/redis/hash?key=user:100&field=email&value=nghiem@test.com"
+   ```
+2. **Truy vấn trường cụ thể**:
+   ```bash
+   curl -X GET "http://localhost:9090/api/v1/redis/hash?key=user:100&field=email"
+   # Trả về: {"key":"user:100","field":"email","value":"nghiem@test.com"}
+   ```
+
+### Bước 4: Test API List (Hàng đợi Queue)
+1. **Push các phần tử vào hàng đợi**:
+   ```bash
+   curl -X POST "http://localhost:9090/api/v1/redis/list?key=notifications&value=Msg1"
+   curl -X POST "http://localhost:9090/api/v1/redis/list?key=notifications&value=Msg2"
+   ```
+2. **Pop phần tử đầu ra khỏi hàng đợi (FIFO)**:
+   ```bash
+   curl -X GET "http://localhost:9090/api/v1/redis/list?key=notifications"
+   # Trả về: {"key":"notifications","popped":"Msg1"}
+   ```
+   *Gọi lại lần nữa sẽ ra `"Msg2"`. Gọi lần 3 sẽ trả về list rỗng.*
+
+### Bước 5: Truy vấn trực tiếp bằng Redis-CLI
+Để xác minh dữ liệu thực tế đang lưu trữ trong Redis có đúng cấu trúc JSON hay không, hãy kết nối vào CLI của Container:
+```bash
+docker exec -it redis_container redis-cli
+```
+Trong môi trường redis-cli, chạy các lệnh:
+```text
+127.0.0.1:6379> keys *
+1) "author"
+2) "user:100"
+
+127.0.0.1:6379> get author
+"\"Antigravity\""
+
+127.0.0.1:6379> hgetall user:100
+1) "name"
+2) "\"Nghiem\""
+3) "email"
+4) "\"nghiem@test.com\""
+```
+*Lưu ý: Dữ liệu value được lưu trữ ở định dạng JSON rõ ràng (có dấu nháy kép bọc quanh chuỗi) nhờ vào Jackson Serializer đã cấu hình.*
+
+---
+
+## 🎯 Tổng kết giá trị của tích hợp Redis
+* **Tốc độ phản hồi cực nhanh**: Giảm thời gian phản hồi cho các dữ liệu ít thay đổi nhưng tần suất truy cập cao.
+* **Cấu trúc JSON rõ ràng**: Tránh việc serialize nhị phân khó debug bằng cách định cấu hình serializer thông minh qua Jackson.
+* **Khả năng mở rộng**: Sẵn sàng tích hợp cho các chức năng phân tán nâng cao như: Distributed Lock (Redisson), Cache/Query-aside Pattern, hoặc Rate Limiter chống Spam API.
+
 
