@@ -73,6 +73,9 @@ dependencies {
 
     //Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Redisson Distributed Lock
+    implementation 'org.redisson:redisson:3.27.2'
 }
 
 tasks.named('test') {
