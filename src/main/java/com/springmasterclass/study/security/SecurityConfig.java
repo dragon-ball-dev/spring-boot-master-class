@@ -80,6 +80,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/v1/cache-demo/products/**").permitAll()
+                        .requestMatchers("/api/v1/cache-protection/**").permitAll()
+                        .requestMatchers("/api/v1/redis/**").permitAll()
                         .anyRequest().authenticated()
                 )
 

@@ -1,0 +1,106 @@
+{
+	"info": {
+		"_postman_id": "b25-cache-protection-collection-id",
+		"name": "Bài 25 - Cache Protection Masterclass (Penetration, Avalanche, Stampede)",
+		"description": "Postman Collection kiểm thử 3 giải pháp chống thảm họa Caching: Bloom Filter, Random Jitter TTL & Anti-Stampede Lock",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Test Bloom Filter - ID Không Tồn Tại (Chặn Cache Penetration)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:9090/api/v1/cache-protection/bloom-filter/9999",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9090",
+					"path": [
+						"api",
+						"v1",
+						"cache-protection",
+						"bloom-filter",
+						"9999"
+					]
+				},
+				"description": "Gửi request với Product ID 9999 không có trong Bloom Filter. Hệ thống sẽ chặn ngay lập tức mà không cần gọi Redis hay Database."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Test Bloom Filter - ID Hợp Lệ (Cache Hit/Miss)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:9090/api/v1/cache-protection/bloom-filter/101",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9090",
+					"path": [
+						"api",
+						"v1",
+						"cache-protection",
+						"bloom-filter",
+						"101"
+					]
+				},
+				"description": "Gửi request với Product ID 101 hợp lệ có trong Bloom Filter. Lần 1 nạp DB, lần 2 trả về từ Redis Cache."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Test Random Jitter TTL (Chống Cache Avalanche)",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:9090/api/v1/cache-protection/jitter-ttl/101",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9090",
+					"path": [
+						"api",
+						"v1",
+						"cache-protection",
+						"jitter-ttl",
+						"101"
+					]
+				},
+				"description": "Lưu Cache với thời gian hết hạn TTL ngẫu nhiên (Base 300s + Jitter 1-60s) để tránh hàng nghìn Key hết hạn cùng 1 lúc."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Test Anti-Stampede Lock (Chống Đám Đông Giẫm Đạp Hot Key)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:9090/api/v1/cache-protection/stampede-lock/101",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9090",
+					"path": [
+						"api",
+						"v1",
+						"cache-protection",
+						"stampede-lock",
+						"101"
+					]
+				},
+				"description": "Kiểm thử khi Key Hot bị hết hạn: Chỉ đúng 1 luồng lấy Redisson Lock xuống DB nạp lại Cache, các luồng còn lại chờ và đọc lại từ Redis."
+			},
+			"response": []
+		}
+	]
+}

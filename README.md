@@ -35,7 +35,8 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 21     | Mã hóa Lai (Hybrid Encryption) & Lưu trữ File (MinIO)          |   ✅ Done   | [View Code](#explore-lesson-21) |
 | 22     | Tích hợp Redis & Thao tác Cấu trúc Dữ liệu (String, Hash, List) |   ✅ Done   | [View Code](#explore-lesson-22) |
 | 23     | Caching với Redis: Giảm tải Database 99%                        |   ✅ Done   | [View Code](#explore-lesson-23) |
-| **24** | **Distributed Lock với Redisson: Chống Overselling & Race Condition** | 🚀 Current | [**Explore**](#explore-lesson-24) |
+| 24     | Distributed Lock với Redisson: Chống Overselling & Race Condition |   ✅ Done   | [View Code](#explore-lesson-24) |
+| **25** | **Giải Quyết 3 Thảm Họa Cache: Penetration, Avalanche & Stampede** | 🚀 Current | [**Explore**](#explore-lesson-25) |
 
 
 ---
@@ -1499,5 +1500,233 @@ curl -X POST "http://localhost:9090/api/v1/flash-sale/simulate-distributed-lock/
 
 ---
 
+<div id="explore-lesson-25"></div>
 
+# 🚀 Bài 25: Giải Quyết 3 Thảm Họa Cache: Penetration, Avalanche & Stampede
 
+Trong hệ thống chịu tải cao (High Concurrency & Massive Traffic), bộ nhớ đệm (Redis Cache) đóng vai trò lá chắn sống còn bảo vệ Database. Tuy nhiên, nếu không xử lý phòng vệ kỹ càng, hệ thống rất dễ sụp đổ dây chuyền khi gặp phải **3 thảm họa kinh điển của Caching**:
+1. **Cache Penetration (Thủng Cache)**
+2. **Cache Avalanche (Tuyết Lở Cache)**
+3. **Cache Stampede / Breakdown (Đám Đông Giẫm Đạp Hot Key)**
+
+Trong bài học này, chúng ta sẽ phân tích bản chất và trực tiếp triển khai trọn bộ giải pháp phòng vệ chuẩn doanh nghiệp: **Redisson Bloom Filter**, **Random Jitter TTL**, và **Redisson Distributed Lock + Double-Checked Locking**.
+
+---
+
+## 💡 Lý thuyết cốt lõi (Core Concepts)
+
+### 1. Thảm họa 1: Cache Penetration (Thủng Cache)
+* **Bản chất vấn đề**: Hacker hoặc client gửi liên tục hàng triệu request với các ID **hoàn toàn không tồn tại** trong hệ thống (ví dụ: `productId = -1`, `99999`, chuỗi rác ngẫu nhiên). Do key không có trong Redis (Cache Miss), mọi request đều lọt thẳng xuống truy vấn Database. Database phải thực hiện Index Scan / Full Table Scan liên tục dẫn tới 100% CPU và sập toàn bộ hệ thống.
+* **Giải pháp: Redisson Bloom Filter (`RBloomFilter`)**:
+  * Bloom Filter là cấu trúc dữ liệu xác suất (Probabilistic Data Structure) siêu nhẹ trên Redis.
+  * Trước khi đọc Redis hay DB, hệ thống kiểm tra Bloom Filter:
+    * Nếu Bloom Filter trả về `false` $\rightarrow$ **Chắc chắn 100% ID không tồn tại** $\rightarrow$ Chặn ngay lập tức (Zero Database/Redis Query).
+    * Nếu Bloom Filter trả về `true` $\rightarrow$ Khả năng cao ID tồn tại (tỷ lệ sai số cho phép $\le 1\%$) $\rightarrow$ Cho phép tiếp tục truy vấn.
+
+```mermaid
+flowchart LR
+    Client([👤 Client Request]) --> BF{🌸 Bloom Filter?}
+    BF -- "❌ False (Chắc chắn không có)" --> Block[⛔ Chặn lập tức - Trả lỗi]
+    BF -- "✅ True (Có thể tồn tại)" --> Cache{⚡ Redis Cache?}
+    Cache -- "HIT" --> ReturnCache[Trả kết quả từ Cache]
+    Cache -- "MISS" --> DB[(🗄️ Database Query)]
+    DB --> SaveCache[Lưu vào Redis Cache]
+    SaveCache --> ReturnDB[Trả kết quả từ DB]
+```
+
+---
+
+### 2. Thảm họa 2: Cache Avalanche (Tuyết Lở Cache)
+* **Bản chất vấn đề**: Hàng chục ngàn sản phẩm được nạp vào Cache đồng thời (ví dụ khi khởi động Server, chạy Batch Job, hoặc chiến dịch quảng cáo) với **cùng một thời gian hết hạn TTL** (ví dụ: đúng 10 phút sau). Khi mốc thời gian đó đến, hàng ngàn key hết hạn cùng 1 tích tắc. Lúc này mọi lượt xem sản phẩm đều là Cache Miss, tạo thành cơn "tuyết lở" đè sập Database.
+* **Giải pháp: Random Jitter TTL (TTL Ngẫu Nhiên)**:
+  * Thay vì set TTL cố định `T`, ta gán thêm một độ lệch ngẫu nhiên: 
+    $$\text{TTL}_{\text{final}} = \text{Base TTL} + \text{Random}(1, \text{Jitter}_{\text{max}})$$
+  * Ví dụ: Base 300s (5 phút) + Jitter từ 1s đến 60s. Các key sẽ hết hạn rải rác từ 301s đến 360s, triệt tiêu hoàn toàn đỉnh tải dồn dập vào Database.
+
+---
+
+### 3. Thảm họa 3: Cache Stampede / Breakdown (Đám Đông Giẫm Đạp Hot Key)
+* **Bản chất vấn đề**: Một sản phẩm "Hot Key" (ví dụ: iPhone 16 Pro Max mở bán, tin tức nóng) có hàng triệu lượt truy cập mỗi giây. Tại đúng thời điểm key này hết hạn TTL hoặc bị xóa, hàng chục ngàn luồng đồng thời phát hiện Cache Miss và **cùng lúc chạy xuống Database** để query và tính toán nạp lại Cache, khiến Database lập tức quá tải.
+* **Giải pháp: Redisson Lock + Double-Checked Locking**:
+  * Khi Cache Miss, các luồng phải cạnh tranh xin Distributed Lock (`RLock`).
+  * **Chỉ duy nhất 1 luồng** lấy được Lock để query Database và nạp lại Cache.
+  * Sau khi có Lock, luồng thực hiện **Double Check Cache** (kiểm tra lại lần nữa vì có thể luồng trước vừa nạp xong).
+  * Các luồng khác không lấy được Lock sẽ đợi một khoảng thời gian ngắn (50ms) rồi đọc lại dữ liệu đã được làm mới từ Redis.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor LuongA as 🧵 Luồng A (Đến trước)
+    actor LuongB as 🧵 Luồng B (Đến sau)
+    participant Redis as ⚡ Redis Cache
+    participant Lock as 🔒 Redisson Lock
+    participant DB as 🗄️ Database
+
+    LuongA->>Redis: 1. Đọc Cache (MISS - Hot key vừa hết hạn)
+    LuongB->>Redis: 2. Đọc Cache (MISS)
+    
+    LuongA->>Lock: 3. tryLock("lock:stampede:product:101") -> CẤP LOCK
+    LuongB->>Lock: 4. tryLock() -> BỊ TỪ CHỐI / ĐỢI
+    
+    LuongA->>Redis: 5. Double-Check Cache (Vẫn MISS)
+    LuongA->>DB: 6. Query DB (Chỉ đúng 1 luồng này!)
+    LuongA->>Redis: 7. Ghi Cache mới (TTL 10 phút)
+    LuongA->>Lock: 8. unlock() -> Giải phóng khóa
+    
+    LuongB->>Redis: 9. Thử đọc lại Cache -> Cache HIT ngay lập tức!
+```
+
+---
+
+## 🛠️ Triển khai Mã Nguồn (Code Implementation)
+
+### 1. Khởi tạo Bloom Filter trên Redis với Redisson
+```java
+@PostConstruct
+public void init() {
+    productBloomFilter = redissonClient.getBloomFilter("bloom:products");
+    // Chứa tối đa 100,000 phần tử, tỷ lệ false positive = 1%
+    productBloomFilter.tryInit(100_000L, 0.01);
+    
+    // Nạp danh sách Product ID hợp lệ
+    productBloomFilter.add(101L);
+    productBloomFilter.add(102L);
+    productBloomFilter.add(103L);
+    productBloomFilter.add(104L);
+    productBloomFilter.add(105L);
+}
+```
+
+### 2. Service Xử lý 3 Cơ chế Bảo vệ (`ICacheProtectionService.java`)
+```java
+@Service
+@RequiredArgsConstructor
+public class ICacheProtectionService implements CacheProtectionService {
+
+    private final RedissonClient redissonClient;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private RBloomFilter<Long> productBloomFilter;
+
+    // 1. Chống Penetration
+    @Override
+    public CacheProtectionResponse getProductWithBloomFilter(Long productId) {
+        if (!productBloomFilter.contains(productId)) {
+            return new CacheProtectionResponse(false, "Chặn Cache Penetration: ID không tồn tại!", null, "BLOOM_FILTER_BLOCKED", 1);
+        }
+        // Cache Hit / Miss logic...
+    }
+
+    // 2. Chống Avalanche
+    @Override
+    public CacheProtectionResponse cacheProductWithJitterTTL(Long productId) {
+        int finalTtl = 300 + ThreadLocalRandom.current().nextInt(1, 61);
+        redisTemplate.opsForValue().set("cache:product:jitter:" + productId, product, Duration.ofSeconds(finalTtl));
+        return new CacheProtectionResponse(true, "Lưu cache với Jitter TTL: " + finalTtl + "s", product, "RANDOM_JITTER_TTL_APPLIED", 2);
+    }
+
+    // 3. Chống Stampede
+    @Override
+    public CacheProtectionResponse getProductWithAntiStampede(Long productId) {
+        // Redisson Lock + Double Check Locking logic...
+    }
+}
+```
+
+---
+
+## 🚦 Hướng dẫn Kiểm thử & Xác minh (Verification Guide)
+
+### Bước 1: Test Bloom Filter - Chặn ID Không Tồn Tại (Penetration)
+Gửi request với Product ID `9999` (không có trong Bloom Filter):
+```bash
+curl -X GET "http://localhost:9090/api/v1/cache-protection/bloom-filter/9999"
+```
+**Kết quả phản hồi**:
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "success": false,
+    "message": "Chặn Cache Penetration: Sản phẩm ID 9999 không tồn tại trong hệ thống!",
+    "data": null,
+    "protectionMechanism": "BLOOM_FILTER_BLOCKED",
+    "executionTimeMs": 1
+  }
+}
+```
+*Ghi nhận: Phản hồi siêu tốc (1ms), hệ thống chặn ngay lập tức mà không cần truy vấn Redis hay Database.*
+
+### Bước 2: Test Bloom Filter - ID Hợp Lệ (Cache Miss & Cache Hit)
+Gửi request với Product ID `101`:
+* **Lần 1 (Cache Miss $\rightarrow$ Nạp Database)**:
+  ```bash
+  curl -X GET "http://localhost:9090/api/v1/cache-protection/bloom-filter/101"
+  ```
+  `protectionMechanism`: `"DATABASE_QUERY_&_CACHE_POPULATED"`, `executionTimeMs`: ~100ms.
+* **Lần 2 (Cache Hit $\rightarrow$ Đọc Redis)**:
+  ```bash
+  curl -X GET "http://localhost:9090/api/v1/cache-protection/bloom-filter/101"
+  ```
+  `protectionMechanism`: `"REDIS_CACHE_HIT"`, `executionTimeMs`: 1-3ms.
+
+### Bước 3: Test Random Jitter TTL (Chống Cache Avalanche)
+Thiết lập Cache cho ID `101` với TTL ngẫu nhiên:
+```bash
+curl -X POST "http://localhost:9090/api/v1/cache-protection/jitter-ttl/101"
+```
+**Kết quả phản hồi**:
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "success": true,
+    "message": "Đã lưu Cache thành công với TTL ngẫu nhiên: 342s để chống Tuyết Lở!",
+    "data": {
+      "id": 101,
+      "name": "Sản Phẩm Cao Cấp #101",
+      "price": 19990000,
+      "stock": 100
+    },
+    "protectionMechanism": "RANDOM_JITTER_TTL_APPLIED (TTL: 342s)",
+    "executionTimeMs": 105
+  }
+}
+```
+*Ghi nhận: TTL được gán 342 giây (Base 300s + Jitter 42s). Mỗi lần gọi API sẽ sinh TTL ngẫu nhiên khác nhau.*
+
+### Bước 4: Test Anti-Stampede Lock (Chống Hot Key Stampede)
+Kiểm thử đọc Hot Key với cơ chế Double-Checked Locking:
+```bash
+curl -X GET "http://localhost:9090/api/v1/cache-protection/stampede-lock/101"
+```
+**Kết quả phản hồi**:
+```json
+{
+  "code": 1000,
+  "message": "Success",
+  "result": {
+    "success": true,
+    "message": "Luồng lấy Lock duy nhất đã query DB & nạp Cache thành công!",
+    "data": {
+      "id": 101,
+      "name": "Sản Phẩm Cao Cấp #101"
+    },
+    "protectionMechanism": "STAMPEDE_SINGLE_DB_QUERY_SUCCESS",
+    "executionTimeMs": 108
+  }
+}
+```
+
+---
+
+## 📊 Bảng Tổng Kết 3 Thảm Họa Cache
+
+| Thảm Họa Caching | Nguyên Nhân Gây Ra | Hậu Quả | Giải Pháp Triển Khai |
+| :--- | :--- | :--- | :--- |
+| **Cache Penetration** (Thủng Cache) | Query liên tục các Key không tồn tại | Request lọt thẳng xuống DB gây sập DB | **Redisson Bloom Filter** hoặc Cache Null Object |
+| **Cache Avalanche** (Tuyết Lở Cache) | Hàng ngàn Key cùng hết hạn TTL tại 1 thời điểm | Đỉnh tải đột biến đè sập DB cùng lúc | **Random Jitter TTL** (Base TTL + Random Delta) |
+| **Cache Stampede** (Đám Đông Giẫm Đạp) | Một Hot Key hết hạn, vạn request cùng lao vào nạp lại | Quá tải tính toán và dồn nghẽn kết nối DB | **Redisson Lock + Double-Checked Locking** |
+
+---
