@@ -34,7 +34,8 @@ Chào mừng bạn đến với khóa học **Spring Boot 4.x Masterclass** trê
 | 20     | Kỹ thuật Refresh Token – Giữ phiên đăng nhập "Bất tử"           |   ✅ Done   | [View Code](#explore-lesson-20) |
 | 21     | Mã hóa Lai (Hybrid Encryption) & Lưu trữ File (MinIO)          |   ✅ Done   | [View Code](#explore-lesson-21) |
 | 22     | Tích hợp Redis & Thao tác Cấu trúc Dữ liệu (String, Hash, List) |   ✅ Done   | [View Code](#explore-lesson-22) |
-| **23** | **Caching với Redis: Giảm tải Database 99%**                    | 🚀 Current | [**Explore**](#explore-lesson-23) |
+| 23     | Caching với Redis: Giảm tải Database 99%                        |   ✅ Done   | [View Code](#explore-lesson-23) |
+| **24** | **Distributed Lock với Redisson: Chống Overselling & Race Condition** | 🚀 Current | [**Explore**](#explore-lesson-24) |
 
 
 ---
@@ -1367,201 +1368,136 @@ Trong môi trường redis-cli, chạy các lệnh:
 
 ---
 
-<div id="explore-lesson-23"></div>
+<div id="explore-lesson-24"></div>
 
-# 🚀 Bài 23: Caching với Redis - Giảm tải Database 99%
+# 🚀 Bài 24: Distributed Lock với Redisson - Chống Overselling & Race Condition
 
-Trong bài học này, chúng ta sẽ ứng dụng Redis làm **In-Memory Cache Layer** cho ứng dụng Spring Boot 4.x thông qua mô hình **Cache-Aside Pattern**. Chúng ta sẽ cấu hình **Spring Cache Manager**, tùy biến **Jackson JSON Serializer**, thiết lập **TTL riêng biệt cho từng cache namespace** và trực quan hóa hiệu năng giảm tải Database tới 99% qua API Benchmark.
+Trong bài học này, chúng ta sẽ giải quyết bài toán chống **Bán quá số lượng kho (Overselling)** và **Race Condition** trong môi trường hệ thống phân tán (Microservices/Multi-Instance Server) bằng cách sử dụng **Redisson Distributed Lock** kết hợp với **Custom Annotation `@DistributedLock` & Spring AOP**.
 
 ---
 
 ## 💡 Lý thuyết cốt lõi (Core Concepts)
 
-### 1. Mô hình Cache-Aside Pattern (Query-Aside)
-Trong đa số hệ thống Backend doanh nghiệp, **Cache-Aside** là mô hình phổ biến nhất giúp tối ưu hóa hiệu năng đọc dữ liệu:
-* **Luồng đọc (Read Path)**:
-  1. Ứng dụng nhận Request tra cứu dữ liệu từ Client.
-  2. Kiểm tra dữ liệu trong **Redis Cache**:
-     - **Cache HIT**: Trả kết quả ngay lập tức cho Client (độ trễ ~1-3ms). KHÔNG truy vấn Database.
-     - **Cache MISS**: Truy vấn dữ liệu từ **Database** (tốn thời gian ~200ms) -> Ghi kết quả vào **Redis Cache** -> Trả về Client.
-* **Luồng ghi/cập nhật (Write/Update Path)**:
-  1. Cập nhật dữ liệu vào Database.
-  2. Đồng thời cập nhật hoặc Xóa Key cũ trong Redis Cache (Cache Invalidation) để tránh trả dữ liệu lỗi thời (Stale Data).
+### 1. Tại sao `synchronized` hay `ReentrantLock` của Java thất bại trong Microservices?
+* Từ khóa `synchronized` và `ReentrantLock` chỉ có tác dụng trong phạm vi **1 JVM (một Server duy nhất)**.
+* Trong thực tế, hệ thống chạy 3-5 Server đằng sau Load Balancer. Khi luồng ở Server 1 và Server 2 cùng bấm mua 1 sản phẩm cuối cùng, `synchronized` ở Server 1 **không thể ngăn cản** Server 2, dẫn đến tồn kho bị âm và bán lố hàng.
+
+### 2. Mô hình Redisson Distributed Lock & Watchdog
+Redisson sử dụng Redis làm "người gác cổng trung tâm". Khi Server xin Lock:
+* Redisson gửi lệnh `SETNX` kèm UUID của luồng tới Redis.
+* **Cơ chế Watchdog**: Mặc định Lock có thời gian hết hạn 30s. Nếu luồng xử lý chưa xong, Watchdog tự động gia hạn thêm 30s mỗi 10s. Nếu Server bị crash/sập nguồn, Watchdog dừng lại và Redis tự giải phóng Lock sau 30s, tránh hiện tượng **Deadlock vĩnh viễn**.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client
-    participant App as Spring Boot Application
-    participant Redis as Redis In-Memory Cache
-    participant DB as Database (PostgreSQL/MySQL)
+    actor Server1 as 🖥️ Server Instance 1
+    actor Server2 as 🖥️ Server Instance 2
+    participant Redis as ⚡ Redis Server (Redisson RLock)
+    participant DB as 🗄️ Database Kho Hàng
 
-    Client->>App: GET /api/v1/cache-demo/products/101
-    App->>Redis: Check key "product_detail::101"
-    
-    alt Cache HIT (Đã có sẵn trong Redis)
-        Redis-->>App: Return Cached JSON
-        App-->>Client: Return response (~2ms) [Giảm tải DB 99%]
-    else Cache MISS (Chưa có trong Redis)
-        Redis-->>App: Return null
-        App->>DB: Query SELECT * FROM products WHERE id=101 (~200ms)
-        DB-->>App: Return Record
-        App->>Redis: SET key "product_detail::101" + TTL 10 mins
-        App-->>Client: Return response (~205ms)
-    end
+    Server1->>Redis: 1. tryLock("lock:flash_sale:101", wait 5s, lease 10s)
+    Redis-->>Server1: 2. Cấp Lock thành công (OK)
+    Note over Server1,Redis: 🔄 Watchdog tự động gia hạn TTL 30s
+
+    Server2->>Redis: 3. tryLock("lock:flash_sale:101", wait 5s, lease 10s)
+    Redis-->>Server2: 4. Bị TỪ CHỐI (Lock đang bị Server 1 giữ)!
+
+    Server1->>DB: 5. Kiểm tra kho (Còn 1) -> Trừ kho về 0
+    Server1->>Redis: 6. unlock() -> Giải phóng khóa
+
+    Redis-->>Server2: 7. Cấp Lock cho Server 2 -> Đọc kho (Đã hết hàng = 0) -> Báo lỗi Hết hàng!
 ```
 
 ---
 
-## 🛠️ Bộ 3 Annotation Quyền Năng trong Spring Cache
+## 🛠️ Triển khai Custom Annotation `@DistributedLock` & AOP Aspect
 
-Spring Caching cung cấp trải nghiệm lập trình khai báo (Declarative Caching) cực kỳ gọn nhẹ qua 3 Annotation chính:
-
-| Annotation | Vai trò & Cơ chế | Ví dụ sử dụng |
-| :--- | :--- | :--- |
-| `@Cacheable` | Kiểm tra Cache trước khi chạy hàm. Nếu có (Cache HIT) -> Trả về luôn. Nếu không (Cache MISS) -> Run hàm & Lưu kết quả vào Cache. | `@Cacheable(value = "product_detail", key = "#id")` |
-| `@CachePut` | **Luôn luôn chạy code trong hàm** (cập nhật DB), sau đó tự động **ghi đè giá trị mới** vào Redis Cache. | `@CachePut(value = "product_detail", key = "#id")` |
-| `@CacheEvict` | **Xóa key khỏi Cache** sau khi thực thi hàm (khi xóa bản ghi hoặc muốn làm sạch Cache). | `@CacheEvict(value = "product_detail", key = "#id")` <br> `@CacheEvict(value = "product_detail", allEntries = true)` |
-
----
-
-## ⚙️ Cấu hình RedisCacheManager & Custom TTL (`RedisConfig.java`)
-
+### 1. Tạo Custom Annotation
 ```java
-@Configuration
-@EnableCaching
-public class RedisConfig {
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface DistributedLock {
+    String key(); // Hỗ trợ SpEL: "'lock:flash_sale:' + #productId"
+    long waitTime() default 5;
+    long leaseTime() default 10;
+    TimeUnit timeUnit() default TimeUnit.SECONDS;
+}
+```
 
-    @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        // Cấu hình mặc định cho tất cả các cache
-        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(10)) // TTL mặc định: 10 phút
-                .disableCachingNullValues() // Không lưu giá trị null vào cache
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new JacksonJsonRedisSerializer<>(Object.class)));
-
-        // Cấu hình TTL riêng cho từng Cache Namespace
-        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        cacheConfigurations.put("product_detail", defaultConfig.entryTtl(Duration.ofMinutes(10)));
-        cacheConfigurations.put("product_list", defaultConfig.entryTtl(Duration.ofMinutes(5)));
-
-        return RedisCacheManager.builder(connectionFactory)
-                .cacheDefaults(defaultConfig)
-                .withInitialCacheConfigurations(cacheConfigurations)
-                .build();
+### 2. Áp dụng vào Service
+```java
+@Override
+@DistributedLock(key = "'lock:flash_sale:' + #productId", waitTime = 5, leaseTime = 10)
+public boolean buyWithRedissonLock(Long productId) {
+    int currentStock = STOCK_DB.getOrDefault(productId, 0);
+    if (currentStock > 0) {
+        STOCK_DB.put(productId, currentStock - 1);
+        return true;
     }
+    return false;
 }
 ```
 
 ---
 
-## 🚦 Hướng dẫn Kiểm thử & Xác minh trực quan (Verification Guide)
+## 🚦 Hướng dẫn Kiểm thử trực quan (Verification Guide)
 
-### Bước 1: Khởi động Redis Service
+### Bước 1: Giả lập 100 Luồng đồng thời KHÔNG DÙNG LOCK (Hiện tượng Race Condition)
 ```bash
-docker-compose up -d redis
+curl -X POST "http://localhost:9090/api/v1/flash-sale/simulate-race-condition/101?concurrentRequests=100"
 ```
-
-### Bước 2: Test API Benchmark giảm tải Database 99%
-1. **Lần 1 - Cache MISS (Truy vấn Database)**:
-   ```bash
-   curl -X GET "http://localhost:9090/api/v1/cache-demo/products/101/benchmark"
-   ```
-   **Phản hồi từ Server**:
-   ```json
-   {
-     "status": 200,
-     "data": {
-       "product": {
-         "id": 101,
-         "name": "MacBook Pro M3 Max 16-inch",
-         "price": 79990000,
-         "description": "Apple M3 Max chip with 16-core CPU and 40-core GPU",
-         "stock": 25,
-         "cachedAt": "2026-07-25 10:15:00"
-       },
-       "source": "DATABASE (Cache MISS)",
-       "executionTimeMs": 208,
-       "databaseLoadReduction": "0%",
-       "explanation": "Lần đầu truy vấn: Hệ thống phải đọc từ Database (tốn ~200ms). Dữ liệu đã được tự động lưu vào Redis Cache cho các lần sau!"
-     }
-   }
-   ```
-
-2. **Lần 2 - Cache HIT (Lấy trực tiếp từ Redis)**:
-   ```bash
-   curl -X GET "http://localhost:9090/api/v1/cache-demo/products/101/benchmark"
-   ```
-   **Phản hồi từ Server**:
-   ```json
-   {
-     "status": 200,
-     "data": {
-       "product": {
-         "id": 101,
-         "name": "MacBook Pro M3 Max 16-inch",
-         "price": 79990000,
-         "description": "Apple M3 Max chip with 16-core CPU and 40-core GPU",
-         "stock": 25,
-         "cachedAt": "2026-07-25 10:15:00"
-       },
-       "source": "REDIS_CACHE (Cache HIT)",
-       "executionTimeMs": 2,
-       "databaseLoadReduction": "99%",
-       "explanation": "Dữ liệu được lấy trực tiếp từ In-Memory Redis Cache. Database hoàn toàn KHÔNG phải xử lý truy vấn!"
-     }
-   }
-   ```
-
-### Bước 3: Test API @CachePut (Cập nhật thông tin & đồng bộ Cache)
-```bash
-curl -X PUT "http://localhost:9090/api/v1/cache-demo/products/101" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "name": "MacBook Pro M3 Max 16-inch (Updated)",
-       "price": 82990000,
-       "description": "Updated M3 Max chip",
-       "stock": 30
-     }'
+**Phản hồi từ Server**:
+```json
+{
+  "status": 200,
+  "data": {
+    "success": false,
+    "message": "CẢNH BÁO! Xảy ra hiện tượng Overselling (Bán lố hàng/Âm kho) do không dùng Lock!",
+    "remainingStock": -18,
+    "totalRequestsProcessed": 100,
+    "successfulOrders": 28,
+    "oversoldAmount": 18,
+    "lockMode": "NO LOCK (Unsafe - Race Condition)"
+  }
+}
 ```
-
-### Bước 4: Test API @CacheEvict (Xóa Cache)
-```bash
-# Xóa 1 sản phẩm & làm sạch key trong Redis
-curl -X DELETE "http://localhost:9090/api/v1/cache-demo/products/101"
-
-# Xóa toàn bộ Cache namespace 'product_detail'
-curl -X DELETE "http://localhost:9090/api/v1/cache-demo/products/clear-all"
-```
-
-### Bước 5: Kiểm tra trực tiếp Key trong Redis CLI
-```bash
-docker exec -it redis_container redis-cli
-```
-Trong `redis-cli`:
-```text
-127.0.0.1:6379> keys *
-1) "product_detail::101"
-
-127.0.0.1:6379> ttl product_detail::101
-(integer) 584
-
-127.0.0.1:6379> get product_detail::101
-"{\"id\":101,\"name\":\"MacBook Pro M3 Max 16-inch\",\"price\":79990000,\"description\":\"Apple M3 Max chip with 16-core CPU and 40-core GPU\",\"stock\":25,\"cachedAt\":\"2026-07-25 10:15:00\"}"
-```
+*Ghi nhận: Kho 10 cái nhưng có tới 28 đơn hàng mua thành công, kho bị âm -18 cái (Bán lố hàng).*
 
 ---
 
-## 📊 Bảng so sánh Chỉ số Hiệu năng (Performance Metrics)
+### Bước 2: Giả lập 100 Luồng đồng thời CÓ REDISSON LOCK (Safe 100%)
+```bash
+curl -X POST "http://localhost:9090/api/v1/flash-sale/simulate-distributed-lock/101?concurrentRequests=100"
+```
+**Phản hồi từ Server**:
+```json
+{
+  "status": 200,
+  "data": {
+    "success": true,
+    "message": "Thành công 100%! Đúng 10 đơn mua thành công, tồn kho còn 0. Không ai mua lố!",
+    "remainingStock": 0,
+    "totalRequestsProcessed": 100,
+    "successfulOrders": 10,
+    "oversoldAmount": 0,
+    "lockMode": "REDISSON DISTRIBUTED LOCK (Safe)"
+  }
+}
+```
+*Ghi nhận: Đúng 10 đơn thành công, kho về đúng 0, số lượng bán lố `oversoldAmount = 0`.*
 
-| Chỉ số (Metric) | Không sử dụng Cache (Direct DB) | Có sử dụng Redis Cache (Cache-Aside) | Mức độ Cải thiện |
+---
+
+## 📊 Bảng so sánh Xử lý Đồng thời (Concurrency Matrix)
+
+| Tiêu chí so sánh | Không sử dụng Lock (Unsafe) | Dùng Java `synchronized` | Dùng Redisson Distributed Lock |
 | :--- | :---: | :---: | :---: |
-| **Response Latency** | ~200ms - 500ms | **1ms - 3ms** | **Nhanh hơn ~100 lần** |
-| **Database IOPS / Load** | 100% Request tới DB | **< 1% Request tới DB** | **Giảm tải 99%** |
-| **Throughput (RPS)** | ~500 req/sec | **> 30,000 req/sec** | **Tăng khả năng chịu tải gấp 60 lần** |
+| **Phạm vi bảo vệ** | Không có | 1 Server (1 JVM) | **Toàn bộ cụm Server (Multi-Instance)** |
+| **Hiện tượng Overselling** | Xảy ra nghiêm trọng | Vẫn xảy ra khi Scale > 1 Server | **Chống Overselling 100%** |
+| **Phòng chống Deadlock** | N/A | Dễ kẹt luồng nếu Crash | **Có Watchdog tự động gia hạn & giải phóng** |
+| **Độ sạch của Codebase** | Rải rác | Rải rác | **Sạch đẹp qua `@DistributedLock` AOP** |
 
 ---
 
 
-
+
